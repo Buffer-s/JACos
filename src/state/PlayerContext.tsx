@@ -12,13 +12,14 @@ import type Hls from 'hls.js';
 import { getStreamUrl, type SCTrack } from '../lib/soundcloud';
 import { ensurePlayable, prefetchTrack } from '../lib/audio-cache';
 import { toast } from '../lib/toast';
-import { readJSON, writeJSON, readString, writeString } from '../lib/storage';
+import { readString, writeString } from '../lib/storage';
+import { getLikedTracks, toggleLikedTrack } from '../lib/localLibrary';
 
 export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 export type RepeatMode = 'off' | 'all' | 'one';
 
 export interface PlaySource {
-  type: 'playlist' | 'tracks' | 'single';
+  type: 'playlist' | 'tracks' | 'single' | 'local';
   id?: number;
   title?: string;
 }
@@ -53,7 +54,7 @@ interface PlayerContextValue {
   toggleMute: () => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
-  toggleLike: (trackId: number) => void;
+  toggleLike: (track: SCTrack) => void;
   isCurrent: (trackId: number) => boolean;
 }
 
@@ -76,8 +77,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState<number>(() => {
-    const v = Number(readString('volume'));
-    return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.8;
+    const raw = readString('volume');
+    const v = raw === null ? NaN : Number(raw);
+    // default is 50% — Number(null) === 0 is what used to mute the player
+    return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
   });
   const [muted, setMuted] = useState<boolean>(() => readString('muted') === '1');
   const [shuffle, setShuffle] = useState<boolean>(() => readString('shuffle') === '1');
@@ -85,7 +88,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const r = readString('repeat');
     return r === 'all' || r === 'one' ? r : 'off';
   });
-  const [likedArr, setLikedArr] = useState<number[]>(() => readJSON<number[]>('liked', []));
+  const [likedArr, setLikedArr] = useState<number[]>(() => getLikedTracks().map((t) => t.id));
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [source, setSource] = useState<PlaySource | null>(null);
 
@@ -274,13 +277,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const toggleLike = useCallback((trackId: number) => {
-    setLikedArr((prevArr) => {
-      const has = prevArr.includes(trackId);
-      const nextArr = has ? prevArr.filter((id) => id !== trackId) : [...prevArr, trackId];
-      writeJSON('liked', nextArr);
-      return nextArr;
-    });
+  const toggleLike = useCallback((track: SCTrack) => {
+    toggleLikedTrack(track);
+    setLikedArr(getLikedTracks().map((t) => t.id));
   }, []);
 
   const isCurrent = useCallback((trackId: number) => current?.id === trackId, [current]);
@@ -388,7 +387,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           setVolume(volume - 0.06);
           break;
         case 'KeyL':
-          if (current) toggleLike(current.id);
+          if (current) toggleLike(current);
           break;
         default:
           break;

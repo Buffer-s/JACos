@@ -2,7 +2,7 @@
 
 **Just Another Copy of Sweden's Soundcloud** — paste a public SoundCloud profile or playlist URL and stream what they publish, straight from SoundCloud's own CDN.
 
-[![version](https://img.shields.io/badge/version-0.0.4-ff5500.svg)](package.json)
+[![version](https://img.shields.io/badge/version-0.0.5-ff5500.svg)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-ff5500.svg)](LICENSE)
 
 Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all audio belongs to its uploaders.
@@ -10,12 +10,16 @@ Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all
 ## Features
 
 - **Paste almost anything** — a profile (`soundcloud.com/bfrend`), a playlist (`soundcloud.com/bfrend/sets/mix`), a full URL, or a bare `@handle`. Link-style URLs work on the hosted site too (`jac-os.pages.dev/bfrend`).
-- **Full player** — play, shuffle, repeat, seek, like, volume, keyboard shortcuts (Space / arrows / L), and lock-screen controls via the Media Session API.
+- **Search like SoundCloud** — the top search box finds **tracks**, **playlists** and **people** across all of SoundCloud, with SoundCloud-style result sections and pagination.
+- **Likes & local playlists** — like any track and it lands in **Likes**; create unlimited **local playlists** with the ＋ button on any row or in the player. Playlists can be renamed, trimmed and deleted. Everything lives in this browser only — nothing is uploaded or synced.
+- **Full player** — play, shuffle, repeat, seek, like, volume (defaults to 50%), keyboard shortcuts (Space / arrows / L), and lock-screen controls via the Media Session API. A right-hand library column (likes + playlists) fills the empty space on wide screens.
+- **Dark & light themes** — perfect dark mode, a light theme faithful to SoundCloud, or follow your system. Toggle in the top bar or Settings → Appearance.
 - **SoundCloud's actual catalog and rules** — unavailable or uploader-blocked tracks are simply not playable; everything public that SoundCloud allows streams here.
-- **Streams once, replays instantly** — the browser caches tracks in Cache Storage (LRU, 40 tracks / 256 MB). Replays come from cache; the audio never touches a server of ours.
 - **Zero-config connection** — on Cloudflare Pages a tiny built-in **Pages Function** (`functions/api/sc`) talks to SoundCloud server-side and handles the web player's `client_id` handshake automatically. Nothing to paste, nothing to sign up for.
-- **Static-host fallback** — if the build is hosted somewhere without Functions, JACos falls back to a browser route chain with an auto-detected, verified `client_id` (and remembers the route that works). A custom `client_id` and CORS proxy can be set in Settings as an escape hatch.
+- **Static-host fallback** — if the build is hosted somewhere without Functions, JACos falls back to a browser route chain with an auto-detected, verified `client_id` (and remembers the route that works). A custom `client_id` and CORS proxy can be set in Settings as an escape hatch. Stuck connection? Settings → **Reset connection** clears the remembered state.
 - **Tracklist parity** — plays, duration, likes and waveform-style seeks, just like the real thing. Because it is a copy of the real thing.
+
+> Note on the audio cache: only progressive MP3 streams can be cached, and only when SoundCloud's CDN lets the browser read the bytes (often it doesn't). A permanent 0 MB reading means the CDN refused caching here — playback is unaffected, and nothing is ever written to disk.
 
 ## How it works
 
@@ -64,7 +68,7 @@ npx wrangler pages dev dist
 
 ## Routes
 
-The SPA uses hash routes (`#/user/<permalink>`, `#/playlist/<id>`). On the Pages site, link-style URLs like `/bfrend` or `/bfrend/sets/<set>` are rewritten to the right page at boot.
+Hash routes: `#/`, `#/user/<permalink>`, `#/playlist/<id>`, `#/search/<query>`, `#/likes`, `#/playlists`, `#/playlists/<id>`. On the Pages site, link-style URLs like `/bfrend` or `/bfrend/sets/<set>` are rewritten to the right page at boot.
 
 ## Settings
 

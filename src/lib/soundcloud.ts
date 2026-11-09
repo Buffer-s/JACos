@@ -381,6 +381,20 @@ async function toApiError(res: Response): Promise<ApiError> {
 
 type Params = Record<string, string | number | undefined>;
 
+/** Batch-fetch full tracks by id (used to migrate legacy liked-id storage). */
+export async function getTracksByIds(ids: number[]): Promise<SCTrack[]> {
+  const out: SCTrack[] = [];
+  for (let i = 0; i < ids.length; i += 30) {
+    try {
+      const res = await apiFetch<any>('/tracks', { ids: ids.slice(i, i + 30).join(',') });
+      out.push(...collectionOf(res).map(mapTrack as (t: any) => SCTrack));
+    } catch {
+      /* skip the batch */
+    }
+  }
+  return out;
+}
+
 async function apiFetch<T = unknown>(pathOrUrl: string, params: Params = {}): Promise<T> {
   try {
     return await bridgeJson<T>(pathOrUrl, params);
@@ -403,7 +417,10 @@ async function apiFetch<T = unknown>(pathOrUrl: string, params: Params = {}): Pr
     url.searchParams.set('client_id', fresh);
     res = await routedFetch(url.toString());
   }
-  if (!res.ok) throw await toApiError(res);
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) removeKey(ROUTE_KEY); // stop remembering a dead route
+    throw await toApiError(res);
+  }
   try {
     return (await res.json()) as T;
   } catch {
@@ -441,18 +458,70 @@ function collectionOf(raw: any): any[] {
   return [];
 }
 
+/** Follow `next_href` pages (linked_partitioning) so small page sizes don't truncate results. */
+async function apiFetchAll(path: string, params: Params, maxPages = 3): Promise<any[]> {
+  const items: any[] = [];
+  let url: string | null = path;
+  let query: Params = params;
+  for (let page = 0; page < maxPages && url; page++) {
+    const raw: any = await apiFetch<any>(url, query);
+    items.push(...collectionOf(raw));
+    url = typeof raw?.next_href === 'string' && raw.next_href ? raw.next_href : null;
+    query = {}; // next_href carries its own cursor params
+  }
+  return items;
+}
+
 export async function getUserPlaylists(userId: number): Promise<SCPlaylist[]> {
-  const raw = await cached<any>(`user-playlists:${userId}`, 10 * MIN, () =>
-    apiFetch<any>(`/users/${userId}/playlists`, { limit: 100, linked_partitioning: 1 }),
+  const items = await cached<any[]>(`user-playlists:${userId}`, 10 * MIN, () =>
+    apiFetchAll(`/users/${userId}/playlists`, { limit: 100, linked_partitioning: 1 }),
   );
-  return collectionOf(raw).map(mapPlaylist as (p: any) => SCPlaylist);
+  return items.map(mapPlaylist as (p: any) => SCPlaylist);
 }
 
 export async function getUserTracks(userId: number): Promise<SCTrack[]> {
-  const raw = await cached<any>(`user-tracks:${userId}`, 10 * MIN, () =>
-    apiFetch<any>(`/users/${userId}/tracks`, { limit: 100, linked_partitioning: 1 }),
+  const items = await cached<any[]>(`user-tracks:${userId}`, 10 * MIN, () =>
+    apiFetchAll(`/users/${userId}/tracks`, { limit: 100, linked_partitioning: 1 }),
   );
-  return collectionOf(raw).map(mapTrack as (t: any) => SCTrack);
+  return items.map(mapTrack as (t: any) => SCTrack);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Search — mirrors soundcloud.com's Tracks / Playlists / People sections     */
+/* -------------------------------------------------------------------------- */
+
+export type SearchType = 'tracks' | 'playlists' | 'users';
+export interface SearchResult<T> {
+  items: T[];
+  /** true when SoundCloud reports more results (next_href present) */
+  hasMore: boolean;
+}
+
+async function apiSearch(type: SearchType, q: string, offset: number): Promise<any> {
+  try {
+    return await apiFetch<any>(`/search/${type}`, { q, limit: 30, offset, linked_partitioning: 1 });
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 404 || err.status === 400)) {
+      // older route shape
+      return apiFetch<any>('/search', { q, type, limit: 30, offset, linked_partitioning: 1 });
+    }
+    throw err;
+  }
+}
+
+export async function searchTracks(q: string, offset = 0): Promise<SearchResult<SCTrack>> {
+  const raw = await apiSearch('tracks', q, offset);
+  return { items: collectionOf(raw).map(mapTrack as (t: any) => SCTrack), hasMore: typeof raw?.next_href === 'string' };
+}
+
+export async function searchPlaylists(q: string, offset = 0): Promise<SearchResult<SCPlaylist>> {
+  const raw = await apiSearch('playlists', q, offset);
+  return { items: collectionOf(raw).map(mapPlaylist as (p: any) => SCPlaylist), hasMore: typeof raw?.next_href === 'string' };
+}
+
+export async function searchUsers(q: string, offset = 0): Promise<SearchResult<SCUser>> {
+  const raw = await apiSearch('users', q, offset);
+  return { items: collectionOf(raw).map(mapUser as (u: any) => SCUser), hasMore: typeof raw?.next_href === 'string' };
 }
 
 export async function getPlaylist(id: number): Promise<SCPlaylist> {

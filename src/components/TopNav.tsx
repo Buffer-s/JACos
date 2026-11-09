@@ -6,6 +6,7 @@ import { parseQuery } from '../lib/query';
 import { resolveUrl, ClientIdUnavailableError, ApiError } from '../lib/soundcloud';
 import { useHashRoute, navigate } from '../lib/router';
 import { toast } from '../lib/toast';
+import { getThemePref, setThemePref, type ThemePref } from '../lib/theme';
 
 export const GITHUB_URL = 'https://github.com/bufferclick/JACos';
 
@@ -14,6 +15,7 @@ export default function TopNav() {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemePref>(() => getThemePref());
 
   useEffect(() => {
     const open = () => setSettingsOpen(true);
@@ -25,7 +27,8 @@ export default function TopNav() {
     e?.preventDefault();
     const parsed = parseQuery(query);
     if (parsed.kind !== 'url') {
-      toast('Enter a SoundCloud URL or @handle — e.g. soundcloud.com/bfrend');
+      const q = query.trim();
+      if (q) navigate(`/search/${encodeURIComponent(q)}`);
       return;
     }
     setBusy(true);
@@ -77,8 +80,8 @@ export default function TopNav() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Paste a SoundCloud profile, playlist or track URL…"
-              aria-label="SoundCloud URL"
+              placeholder="Search tracks, playlists, people — or paste a URL…"
+              aria-label="Search SoundCloud or paste a URL"
               spellCheck={false}
               autoComplete="off"
               enterKeyHint="go"
@@ -87,6 +90,24 @@ export default function TopNav() {
           </form>
 
           <div className="topnav-right">
+            <button
+              className="icon-btn theme-btn"
+              onClick={() => {
+                const order: ThemePref[] = ['system', 'light', 'dark'];
+                const next = order[(order.indexOf(theme) + 1) % order.length];
+                setThemePref(next);
+                setTheme(next);
+                toast(next === 'system' ? 'Theme: follows your system.' : `Theme: ${next}.`);
+              }}
+              aria-label={`Theme: ${theme}. Click to change.`}
+              title={`Theme: ${theme} (click to cycle system / light / dark)`}
+            >
+              {theme === 'dark' ? (
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M16.2 12.4A7 7 0 0 1 7.6 3.8a7 7 0 1 0 8.6 8.6Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="4.1" stroke="currentColor" strokeWidth="1.5"/><path d="M10 1.5v2.4M10 16.1v2.4M1.5 10h2.4M16.1 10h2.4M4 4l1.7 1.7M14.3 14.3 16 16M4 16l1.7-1.7M14.3 5.7 16 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              )}
+            </button>
             <a className="btn btn-github" href={GITHUB_URL} target="_blank" rel="noreferrer" title="View the source on GitHub">
               <GitHubMark size={17} />
               <span>View on GitHub</span>

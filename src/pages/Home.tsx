@@ -28,7 +28,8 @@ export default function Home() {
   const go = async (raw: string) => {
     const parsed = parseQuery(raw);
     if (parsed.kind !== 'url') {
-      toast('Enter a SoundCloud URL or @handle — e.g. soundcloud.com/bfrend');
+      const q = raw.trim();
+      if (q) navigate(`/search/${encodeURIComponent(q)}`);
       return;
     }
     setBusy(true);
@@ -84,8 +85,8 @@ export default function Home() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="soundcloud.com/bfrend"
-              aria-label="SoundCloud profile or playlist URL"
+              placeholder="Search tracks, playlists, people — or paste a URL"
+              aria-label="Search SoundCloud or paste a URL"
               spellCheck={false}
               autoComplete="off"
               autoFocus

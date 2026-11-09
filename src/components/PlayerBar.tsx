@@ -3,6 +3,7 @@ import { usePlayer } from '../state/PlayerContext';
 import { artwork } from '../lib/soundcloud';
 import { navigate } from '../lib/router';
 import { TrackArtwork } from './TrackRow';
+import AddToPlaylistButton from './AddToPlaylistButton';
 
 /** seconds -> "m:ss" */
 function fmtClock(total: number): string {
@@ -171,7 +172,8 @@ export default function PlayerBar() {
 
         {/* ---- right side: like, clock, volume ---- */}
         <div className="pb-right">
-          <button className={`pb-icon${isLiked ? ' is-on' : ''}`} onClick={() => toggleLike(current.id)} aria-label={isLiked ? 'Unlike' : 'Like'} aria-pressed={isLiked} title={isLiked ? 'Unlike' : 'Like'}>
+          <AddToPlaylistButton track={current} size="bar" />
+          <button className={`pb-icon${isLiked ? ' is-on' : ''}`} onClick={() => toggleLike(current)} aria-label={isLiked ? 'Unlike' : 'Like'} aria-pressed={isLiked} title={isLiked ? 'Unlike' : 'Like'}>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
               <path
                 d="M8 14.2s-5.9-3.8-7.6-8.9C-.5 2.3 1.8.7 3.9.7c1.5 0 3 .9 4.1 2.4C9.1 1.6 10.6.7 12.1.7c2.1 0 4.4 1.6 3.5 4.6-1.7 5.1-7.6 8.9-7.6 8.9Z"

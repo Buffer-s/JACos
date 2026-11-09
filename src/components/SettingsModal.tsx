@@ -9,10 +9,11 @@ import {
   clearCustomClientId,
   resolveUrl,
   getActiveRouteLabel,
-  clearActiveRoute,
   ClientIdUnavailableError,
 } from '../lib/soundcloud';
 import { version } from '../../package.json';
+import { getThemePref, setThemePref, type ThemePref } from '../lib/theme';
+import { removeKey } from '../lib/storage';
 import { cacheStats, clearAudioCache, onCacheChange, type CacheStats } from '../lib/audio-cache';
 import { toast } from '../lib/toast';
 import GitHubMark from './GitHubMark';
@@ -26,6 +27,7 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
   const [proxy, setProxy] = useState('');
   const [testing, setTesting] = useState(false);
   const [route, setRoute] = useState<string>('Not detected yet');
+  const [themePref, setThemePrefState] = useState<ThemePref>(() => getThemePref());
 
   const refreshStats = () => void cacheStats().then(setStats);
 
@@ -92,6 +94,20 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     }
   };
 
+  const resetConnection = () => {
+    removeKey('client_id_cache');
+    removeKey('api_route');
+    toast('Connection state cleared — the bridge and routes will be re-probed on the next request. Your likes and playlists are untouched.');
+    setSource(getClientIdSource());
+    setRoute(getActiveRouteLabel());
+  };
+
+  const themeOptions: { id: ThemePref; label: string }[] = [
+    { id: 'system', label: 'System' },
+    { id: 'light', label: 'Light' },
+    { id: 'dark', label: 'Dark' },
+  ];
+
   const sourceLabel =
     source === 'server' ? 'Built-in bridge (no setup needed)' : source === 'custom' ? 'Custom (yours)' : source === 'scrape' ? 'Auto-detected from soundcloud.com' : source === 'cache' ? 'Auto-detected (cached)' : 'Not needed — handled by the bridge';
 
@@ -124,8 +140,8 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
               corsproxy.io &rarr; api.cors.lol &rarr; api.allorigins.win. The one that answers first is
               <strong> remembered</strong>; if it stops working, JACos falls back automatically.
             </p>
-            <button className="btn btn-ghost btn-sm" onClick={() => { clearActiveRoute(); setRoute(getActiveRouteLabel()); toast('Route memory cleared — the chain will be re-probed on the next request.'); }} style={{ marginBottom: 4 }}>
-              Forget remembered route
+            <button className="btn btn-ghost btn-sm" onClick={resetConnection} style={{ marginBottom: 4 }}>
+              Reset connection (fixes a stuck state)
             </button>
             <p className="modal-help" style={{ marginTop: 10 }}>
               SoundCloud has no public API keys, so JACos detects the same client_id the web player uses.
@@ -169,9 +185,15 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
           <section className="modal-section">
             <h3>Audio cache</h3>
             <p className="modal-help">
-              Songs stream from SoundCloud&rsquo;s CDN exactly as on the real site. The first play downloads the
-              MP3 once into your browser&rsquo;s <strong>Cache Storage</strong> — capped at
-              40 tracks / 256&nbsp;MB, oldest evicted automatically. Replays come straight from cache.
+              Songs stream from SoundCloud&rsquo;s CDN exactly as on the real site. The first play is
+              downloaded once into your browser&rsquo;s <strong>Cache Storage</strong> and replays come straight
+              from cache (capped at 40 tracks / 256&nbsp;MB, oldest evicted first).
+            </p>
+            <p className="modal-help">
+              Two honest caveats: only <strong>progressive MP3</strong> streams are cached — HLS streams are not —
+              and caching only works when SoundCloud&rsquo;s CDN lets this browser read the bytes, which it often
+              doesn&rsquo;t. A permanent <strong>0 MB</strong> just means the CDN refused caching here; playback is
+              unaffected and nothing is ever written to disk.
             </p>
             <div className="cache-row">
               <div className="cache-stat">
@@ -185,6 +207,27 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
               <button className="btn btn-outline btn-sm" onClick={() => { void clearAudioCache().then(() => { toast('Audio cache cleared.'); refreshStats(); }); }}>
                 Clear cache
               </button>
+            </div>
+          </section>
+
+          {/* ---- Appearance ---- */}
+          <section className="modal-section">
+            <h3>Appearance</h3>
+            <p className="modal-help">Choose how JACo&rsquo;s looks. “System” follows your OS setting.</p>
+            <div className="theme-picker" role="group" aria-label="Theme">
+              {themeOptions.map((o) => (
+                <button
+                  key={o.id}
+                  className={`theme-option${themePref === o.id ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setThemePref(o.id);
+                    setThemePrefState(o.id);
+                  }}
+                  aria-pressed={themePref === o.id}
+                >
+                  {o.label}
+                </button>
+              ))}
             </div>
           </section>
 

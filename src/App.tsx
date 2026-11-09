@@ -6,11 +6,18 @@ import Toasts from './components/Toasts';
 import Logo from './components/Logo';
 import GitHubMark from './components/GitHubMark';
 import { version } from '../package.json';
+import { useEffect } from 'react';
 import Home from './pages/Home';
 import UserPage from './pages/UserPage';
 import PlaylistPage from './pages/PlaylistPage';
 import NotFound from './pages/NotFound';
 import ResolvePage from './pages/ResolvePage';
+import SearchPage from './pages/SearchPage';
+import LikesPage from './pages/LikesPage';
+import PlaylistsPage from './pages/PlaylistsPage';
+import LocalPlaylistPage from './pages/LocalPlaylistPage';
+import Sidebar from './components/Sidebar';
+import { migrateLegacyLikes } from './lib/localLibrary';
 
 function Routed() {
   const route = useHashRoute();
@@ -23,6 +30,14 @@ function Routed() {
       return <PlaylistPage key={route.id} id={route.id} />;
     case 'resolve':
       return <ResolvePage key={route.scPath} scPath={route.scPath} />;
+    case 'search':
+      return <SearchPage key={route.q} q={route.q} />;
+    case 'likes':
+      return <LikesPage />;
+    case 'playlists':
+      return <PlaylistsPage />;
+    case 'localplaylist':
+      return <LocalPlaylistPage key={route.id} id={route.id} />;
     default:
       return <NotFound />;
   }
@@ -58,11 +73,20 @@ function Footer() {
 }
 
 export default function App() {
+  useEffect(() => {
+    void migrateLegacyLikes();
+  }, []);
+
   return (
     <PlayerProvider>
       <TopNav />
       <main className="main">
-        <Routed />
+        <div className="page-shell">
+          <div className="page-content">
+            <Routed />
+          </div>
+          <Sidebar />
+        </div>
       </main>
       <Footer />
       <PlayerBar />

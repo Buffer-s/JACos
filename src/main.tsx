@@ -3,10 +3,15 @@ import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/inter';
 import './styles.css';
 import App from './App';
+import { applyTheme, getThemePref, watchSystemTheme } from './lib/theme';
 
 // Link-style URLs (jac-os.pages.dev/bfrend, /bfrend/sets/x) get one boot-time
 // hop to the #/resolve route, which points them at the right page. Static
 // assets and files are untouched.
+// Theme: apply before first paint to avoid a flash of the wrong theme.
+applyTheme(getThemePref());
+watchSystemTheme();
+
 const bootPath = window.location.pathname;
 if (bootPath !== '/' && window.location.hash === '') {
   const segs = bootPath.split('/').filter(Boolean);

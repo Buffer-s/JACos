@@ -44,3 +44,9 @@ export function removeKey(key: string): void {
     /* non-fatal */
   }
 }
+
+/** Like writeJSON, but surfaces quota/serialization failures (for capacity-critical writes). */
+export function writeJSONStrict(key: string, value: unknown): void {
+  const raw = JSON.stringify(value);
+  localStorage.setItem(PREFIX + key, raw);
+}
