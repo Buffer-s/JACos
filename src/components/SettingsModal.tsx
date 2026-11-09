@@ -93,7 +93,7 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
   };
 
   const sourceLabel =
-    source === 'custom' ? 'Custom (yours)' : source === 'scrape' ? 'Auto-detected from soundcloud.com' : source === 'cache' ? 'Auto-detected (cached)' : source === 'fallback' ? 'Community fallback id' : 'Not detected yet';
+    source === 'server' ? 'Built-in bridge (no setup needed)' : source === 'custom' ? 'Custom (yours)' : source === 'scrape' ? 'Auto-detected from soundcloud.com' : source === 'cache' ? 'Auto-detected (cached)' : 'Not needed — handled by the bridge';
 
   const mb = stats ? (stats.bytes / (1024 * 1024)).toFixed(1) : '–';
 
@@ -118,11 +118,11 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
               <span className="status-label">route</span> {route}
             </p>
             <p className="modal-help">
-              SoundCloud often blocks direct browser requests, so every request walks a route chain:
-              your custom proxy (if set) &rarr; the route that worked last time &rarr; direct &rarr;
+              On Cloudflare Pages, JACos talks to SoundCloud through a tiny built-in server bridge —
+              no buttons to press, nothing to paste. If the static build is hosted somewhere without
+              that bridge, JACos falls back to a route chain: your custom proxy (if set) &rarr; direct &rarr;
               corsproxy.io &rarr; api.cors.lol &rarr; api.allorigins.win. The one that answers first is
-              <strong> remembered</strong> and used from then on. If it ever stops working, JACos
-              falls back automatically and remembers the new one.
+              <strong> remembered</strong>; if it stops working, JACos falls back automatically.
             </p>
             <button className="btn btn-ghost btn-sm" onClick={() => { clearActiveRoute(); setRoute(getActiveRouteLabel()); toast('Route memory cleared — the chain will be re-probed on the next request.'); }} style={{ marginBottom: 4 }}>
               Forget remembered route
