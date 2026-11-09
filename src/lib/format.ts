@@ -1,64 +1,65 @@
-/** Formatting helpers — counts, durations, dates. */
-
-export function fmtCount(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return '0';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
-  return String(n);
+/** SoundCloud image URLs end in a size token such as -large; swap it for the size we want. */
+export function art(url: string | null | undefined, size: "t500x500" | "t300x300" | "t200x200" | "t120x120" | "badge" = "t300x300"): string | null {
+  if (!url) return null;
+  return url.replace(/-(large|original|crop|t\d+x\d+|badge|small|tiny)\.(jpg|jpeg|png)/i, `-${size}.$2`);
 }
 
-export function fmtFullCount(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return '0';
-  return n.toLocaleString();
-}
-
-/** ms → "m:ss" (or "h:mm:ss") */
-export function fmtDuration(ms: number | null | undefined): string {
-  if (ms == null || Number.isNaN(ms) || ms < 0) return '0:00';
+export function formatTime(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "0:00";
   const total = Math.floor(ms / 1000);
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  return `${m}:${String(s).padStart(2, '0')}`;
+  const ss = String(s).padStart(2, "0");
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${ss}`;
+  return `${m}:${ss}`;
 }
 
-/** seconds → "m:ss" (for the player progress readout) */
-export function fmtClock(seconds: number | null | undefined): string {
-  if (seconds == null || Number.isNaN(seconds) || seconds < 0) return '0:00';
-  return fmtDuration(seconds * 1000);
+export function formatLongDuration(ms: number): string {
+  const total = Math.round(ms / 60000);
+  if (total < 60) return `${total} min`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m ? `${h} hr ${m} min` : `${h} hr`;
 }
 
-export function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+export function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
+  if (n >= 10_000) return `${Math.round(n / 1000)}K`;
+  if (n >= 1_000) return n.toLocaleString("en-US");
+  return String(n);
 }
 
-export function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso).getTime();
-  if (Number.isNaN(d)) return '';
-  const diff = Date.now() - d;
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+export function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diff = Math.max(0, Date.now() - then);
+  const day = 86_400_000;
+  const days = Math.floor(diff / day);
+  if (days < 1) return "today";
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  const years = Math.floor(months / 12);
-  return `${years}y ago`;
+  if (months < 12) return `${months} month${months === 1 ? "" : "s"} ago`;
+  const years = Math.floor(days / 365);
+  return `${years} year${years === 1 ? "" : "s"} ago`;
 }
 
-/** Sum durations (ms) of a list of tracks and format the playlist total. */
-export function fmtTotalDuration(ms: number): string {
-  const totalMin = Math.floor(ms / 60_000);
-  if (totalMin < 60) return `${totalMin} min`;
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${h} hr ${m} min`;
+/**
+ * Turns whatever the user typed (a full URL, "soundcloud.com/name", or just "name")
+ * into an internal route.
+ */
+export function routeFromInput(raw: string): string | null {
+  let value = raw.trim();
+  if (!value) return null;
+  value = value.replace(/^https?:\/\//i, "").replace(/^(www\.|m\.)/i, "");
+  value = value.replace(/^soundcloud\.com\/?/i, "");
+  value = value.split(/[?#]/)[0].replace(/^\/+|\/+$/g, "");
+  if (!value) return null;
+  const parts = value.split("/").filter(Boolean);
+  if (parts.length === 0) return null;
+  const user = encodeURIComponent(parts[0].replace(/^@/, ""));
+  if (parts[1] === "sets" && parts[2]) {
+    return `/u/${user}/sets/${encodeURIComponent(parts[2])}`;
+  }
+  return `/u/${user}`;
 }

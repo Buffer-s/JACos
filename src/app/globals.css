@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  --sc-orange: #f50;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: #ffd3c0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--sc-orange);
+  outline-offset: 2px;
+}
