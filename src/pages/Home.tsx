@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { parseQuery } from '../lib/query';
-import { resolveUrl, ClientIdUnavailableError } from '../lib/soundcloud';
+import { resolveUrl, ClientIdUnavailableError, ApiError } from '../lib/soundcloud';
 import { navigate, openSettings } from '../lib/router';
 import { toast } from '../lib/toast';
 import { readJSON } from '../lib/storage';
@@ -14,7 +14,7 @@ interface RecentUser {
   avatar: string | null;
 }
 
-const EXAMPLES = ['soundcloud.com/bfrend', 'soundcloud.com/basshunter'];
+const EXAMPLES = ['soundcloud.com/bfrend'];
 
 export default function Home() {
   const [query, setQuery] = useState('');
@@ -41,8 +41,8 @@ export default function Home() {
         navigate(uploader ? `/user/${encodeURIComponent(uploader)}` : '/');
       } else toast('Could not resolve that URL.');
     } catch (err) {
-      if (err instanceof ClientIdUnavailableError) {
-        toast('SoundCloud connection failed. Open Settings to paste a client_id.', {
+      if (err instanceof ClientIdUnavailableError || (err instanceof ApiError && err.status === 0)) {
+        toast('Couldn’t reach SoundCloud. Open Settings to check the connection / set a proxy.', {
           actionLabel: 'Settings',
           onAction: openSettings,
         });
@@ -68,8 +68,8 @@ export default function Home() {
           </div>
           <p className="hero-tagline">Just Another Copy of Sweden&rsquo;s Soundcloud</p>
           <p className="hero-copy">
-            Paste a public SoundCloud profile or playlist URL. JACos lists what the user publishes and
-            streams every track in your browser — no account, no sign-in, no files written to disk.
+            Paste a public SoundCloud profile or playlist URL and play what they publish —
+            streamed from SoundCloud&rsquo;s own CDN.
           </p>
 
           <form
@@ -119,46 +119,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* ----------------------------------- CSS-drawn product mock (not an image) */}
-        <div className="hero-mock" aria-hidden="true">
-          <div className="mock-window">
-            <div className="mock-chrome">
-              <span className="mock-dot" /><span className="mock-dot" /><span className="mock-dot" />
-              <span className="mock-address">soundcloud.com/basshunter/sets/…</span>
-            </div>
-            <div className="mock-body">
-              <div className="mock-side">
-                <div className="mock-art">
-                  <svg viewBox="0 0 48 48" width="52" height="52" fill="none"><path d="M8 26a7 7 0 0 1 6.7-7 10.2 10.2 0 0 1 10-7.8A10.5 10.5 0 0 1 34 17.4 8.3 8.3 0 0 1 44 24a8.3 8.3 0 0 1-3.2 6.6" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" opacity=".95"/></svg>
-                </div>
-                <div className="mock-line w70 h16" />
-                <div className="mock-line w40 h12" />
-                <div className="mock-playbtn">
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M9 6.8v10.4a.8.8 0 0 0 1.22.68l8.2-5.2a.8.8 0 0 0 0-1.36l-8.2-5.2A.8.8 0 0 0 9 6.8Z"/></svg>
-                </div>
-                <div className="mock-line w90 h10 mt8" />
-                <div className="mock-line w60 h10" />
-              </div>
-              <div className="mock-tracks">
-                {[0.92, 0.74, 1, 0.6, 0.82, 0.68].map((w, i) => (
-                  <div className="mock-row" key={i}>
-                    <div className={`mock-rnum${i === 2 ? ' is-live' : ''}`}>{i + 1}</div>
-                    <div className="mock-rmain">
-                      <div className={`mock-line ${i === 2 ? 'is-live' : ''}`} style={{ width: `${w * 78}%`, height: 11 }} />
-                      <div className="mock-line w45 h9" />
-                    </div>
-                    <div className="mock-rwave">
-                      {Array.from({ length: 26 }).map((_, j) => (
-                        <i key={j} style={{ height: `${18 + ((i * 31 + j * 37) % 60)}%` }} className={i === 2 && j < 14 ? 'is-played' : ''} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <p className="mock-caption">A playlist page — same layout, same orange, no account required.</p>
-        </div>
       </section>
 
       {/* -------------------------------------------------- how it works */}
@@ -178,7 +138,7 @@ export default function Home() {
           <li className="how-step">
             <span className="how-num">3</span>
             <h3>Press play</h3>
-            <p>Tracks stream from SoundCloud&rsquo;s CDN and are stored once in your browser&rsquo;s Cache Storage — never as files on disk.</p>
+            <p>Tracks stream from SoundCloud&rsquo;s CDN and are cached once in your browser&rsquo;s Cache Storage — replays come straight from cache.</p>
           </li>
         </ol>
       </section>

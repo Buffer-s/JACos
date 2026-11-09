@@ -3,7 +3,7 @@ import Logo from './Logo';
 import GitHubMark from './GitHubMark';
 import SettingsModal from './SettingsModal';
 import { parseQuery } from '../lib/query';
-import { resolveUrl, ClientIdUnavailableError } from '../lib/soundcloud';
+import { resolveUrl, ClientIdUnavailableError, ApiError } from '../lib/soundcloud';
 import { useHashRoute, navigate } from '../lib/router';
 import { toast } from '../lib/toast';
 
@@ -46,8 +46,8 @@ export default function TopNav() {
       }
       setQuery('');
     } catch (err) {
-      if (err instanceof ClientIdUnavailableError) {
-        toast('SoundCloud connection failed. Open Settings to paste a client_id.', {
+      if (err instanceof ClientIdUnavailableError || (err instanceof ApiError && err.status === 0)) {
+        toast('Couldn’t reach SoundCloud. Open Settings to check the connection / set a proxy.', {
           actionLabel: 'Settings',
           onAction: () => setSettingsOpen(true),
         });

@@ -11,15 +11,17 @@
  * If all of that fails the app shows a manual "paste a client_id" panel.
  *
  * Everything runs in the browser. Requests hit api-v2.soundcloud.com and,
- * for media, SoundCloud's CDN. A custom CORS proxy can be set in Settings
- * for networks where direct requests are blocked.
+ * for media, SoundCloud's CDN. Direct access is often blocked by CORS, so
+ * every request goes through a route chain: your custom proxy (Settings,
+ * if set) → the route that worked last time → direct → public CORS proxies.
+ * The winning route is remembered in localStorage and tried first next time.
  */
 
 import { readJSON, writeJSON, readString, writeString, removeKey } from './storage';
 
 const API_ORIGIN = 'https://api-v2.soundcloud.com';
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -169,34 +171,120 @@ export function invalidateClientId(): void {
   removeKey(cacheKey);
 }
 
-function proxied(url: string): string {
-  const proxy = getApiProxy();
-  return proxy ? proxy + encodeURIComponent(url) : url;
+const ROUTE_KEY = 'api_route';
+
+export interface RouteInfo {
+  id: string;
+  label: string;
+}
+interface RouteCandidate extends RouteInfo {
+  build: (url: string) => string;
 }
 
-async function fetchText(url: string, timeoutMs = REQUEST_TIMEOUT_MS): Promise<string> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(proxied(url), { signal: ctrl.signal, mode: 'cors' });
-    if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status} for ${url}`);
-    return await res.text();
-  } finally {
-    clearTimeout(t);
+/**
+ * Built-in routes, in default order (after the custom proxy and the
+ * remembered winner). Every candidate is validated before its response is
+ * accepted, so a proxy error page never gets mistaken for SoundCloud.
+ */
+const PUBLIC_ROUTES: RouteCandidate[] = [
+  { id: 'direct', label: 'Direct connection', build: (url) => url },
+  { id: 'corsproxy.io', label: 'corsproxy.io', build: (url) => `https://corsproxy.io/?url=${encodeURIComponent(url)}` },
+  { id: 'api.cors.lol', label: 'api.cors.lol', build: (url) => `https://api.cors.lol/?url=${encodeURIComponent(url)}` },
+  { id: 'api.allorigins.win', label: 'api.allorigins.win', build: (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` },
+];
+
+function customRoute(): RouteCandidate | null {
+  const proxy = getApiProxy();
+  return proxy ? { id: 'custom', label: 'Your custom proxy', build: (url) => proxy + encodeURIComponent(url) } : null;
+}
+
+function routeById(id: string | null): RouteCandidate | null {
+  if (!id) return null;
+  if (id === 'custom') return customRoute();
+  return PUBLIC_ROUTES.find((r) => r.id === id) ?? null;
+}
+
+/** Label of the route that last worked — shown in Settings. */
+export function getActiveRouteLabel(): string {
+  return routeById(readString(ROUTE_KEY))?.label ?? 'Not detected yet';
+}
+
+/** Forget the remembered route; the chain is re-probed from the top. */
+export function clearActiveRoute(): void {
+  removeKey(ROUTE_KEY);
+}
+
+type BodyKind = 'json' | 'html' | 'js';
+
+/** Cheap content sniffing — SoundCloud's api always answers JSON, and its
+ *  homepage/bundles have unmistakable markers. Proxy error pages don't. */
+const validators: Record<BodyKind, (body: string) => boolean> = {
+  json: (body) => {
+    try {
+      JSON.parse(body);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  html: (body) => body.includes('a-v2.sndcdn.com'),
+  js: (body) => body.length > 3000,
+};
+
+interface RawResponse {
+  status: number;
+  body: string;
+  route: RouteCandidate;
+}
+
+/**
+ * Fetch `url`, walking the route chain in order: custom proxy (if set) →
+ * the route that worked last time → the built-in chain. The winner is
+ * remembered in localStorage and tried first from then on.
+ */
+async function routedFetch(url: string, kind: BodyKind, timeoutMs = REQUEST_TIMEOUT_MS): Promise<RawResponse> {
+  const ordered: RouteCandidate[] = [];
+  const push = (route: RouteCandidate | null) => {
+    if (route && !ordered.includes(route)) ordered.push(route);
+  };
+  push(customRoute());
+  push(routeById(readString(ROUTE_KEY)));
+  for (const route of PUBLIC_ROUTES) push(route);
+
+  for (const route of ordered) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(route.build(url), { signal: ctrl.signal, mode: 'cors' });
+      const body = await res.text();
+      if (!validators[kind](body)) continue; // error page / non-SoundCloud answer — next route
+      writeString(ROUTE_KEY, route.id);
+      return { status: res.status, body, route };
+    } catch {
+      /* unreachable or timed out through this route — try the next one */
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  throw new ApiError(0, 'Network error — SoundCloud may be unreachable from your network.');
+}
+
+async function fetchText(url: string, kind: 'html' | 'js'): Promise<string> {
+  const { body } = await routedFetch(url, kind);
+  return body;
 }
 
 /** Try to scrape a live client_id out of soundcloud.com's web bundles. */
 async function scrapeClientId(): Promise<string | null> {
   try {
-    const html = await fetchText('https://soundcloud.com/');
+    const html = await fetchText('https://soundcloud.com/', 'html');
     const scriptUrls = Array.from(
       new Set(html.match(/https:\/\/a-v2\.sndcdn\.com\/assets\/[^"'\s]+\.js/g) ?? []),
     );
     // The id tends to hide in the last bundles
     for (const url of scriptUrls.reverse().slice(0, 12)) {
       try {
-        const js = await fetchText(url);
+        const js = await fetchText(url, 'js');
         const m =
           js.match(/client_id:"([0-9a-zA-Z]{32})"/) ||
           js.match(/client_id["']?\s*[:=]\s*["']([0-9a-zA-Z]{32})["']/);
@@ -206,7 +294,7 @@ async function scrapeClientId(): Promise<string | null> {
       }
     }
   } catch {
-    /* soundcloud.com blocked / CORS — fall through */
+    /* soundcloud.com blocked everywhere we looked — fall through */
   }
   return null;
 }
@@ -262,19 +350,9 @@ async function apiFetch<T>(path: string, params: Record<string, string>, retry =
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   url.searchParams.set('client_id', cid);
 
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  let res: Response;
-  try {
-    res = await fetch(proxied(url.toString()), { signal: ctrl.signal, mode: 'cors' });
-  } catch (err) {
-    clearTimeout(t);
-    if ((err as Error).name === 'AbortError') throw new ApiError(0, 'Request timed out');
-    throw new ApiError(0, 'Network error — SoundCloud may be unreachable from your network.');
-  }
-  clearTimeout(t);
+  const { status, body } = await routedFetch(url.toString(), 'json');
 
-  if ((res.status === 401 || res.status === 403) && retry) {
+  if ((status === 401 || status === 403) && retry) {
     // Stale client_id — drop it and try to detect a fresh one exactly once.
     const stale = resolvedClientId;
     removeKey(cacheKey);
@@ -282,24 +360,25 @@ async function apiFetch<T>(path: string, params: Record<string, string>, retry =
     try {
       await detectClientId({ forceRefresh: true, excludeId: stale ?? undefined });
     } catch {
-      throw new ApiError(res.status, 'SoundCloud rejected the client_id. Open Settings and paste a fresh one.');
+      throw new ApiError(status, 'SoundCloud rejected the client_id. Open Settings and paste a fresh one.');
     }
     return apiFetch<T>(path, params, false);
   }
 
-  if (res.status === 404) throw new ApiError(404, 'Not found on SoundCloud.');
-  if (res.status === 429) throw new ApiError(429, 'Rate limited by SoundCloud — wait a moment and retry.');
-  if (!res.ok) {
-    let detail = '';
-    try {
-      const body = (await res.json()) as { message?: string };
-      detail = body?.message ?? '';
-    } catch {
-      /* ignore */
-    }
-    throw new ApiError(res.status, detail || `SoundCloud error (HTTP ${res.status}).`);
+  if (status === 404) throw new ApiError(404, 'Not found on SoundCloud.');
+  if (status === 429) throw new ApiError(429, 'Rate limited by SoundCloud — wait a moment and retry.');
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    throw new ApiError(status, 'SoundCloud returned an unreadable response.');
   }
-  return (await res.json()) as T;
+  if (status < 200 || status >= 300) {
+    const detail = (parsed as { message?: string } | null)?.message;
+    throw new ApiError(status, detail || `SoundCloud error (HTTP ${status}).`);
+  }
+  return parsed as T;
 }
 
 interface Collection<T> {

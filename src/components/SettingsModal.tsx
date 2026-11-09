@@ -8,8 +8,11 @@ import {
   setCustomClientId,
   clearCustomClientId,
   resolveUrl,
+  getActiveRouteLabel,
+  clearActiveRoute,
   ClientIdUnavailableError,
 } from '../lib/soundcloud';
+import { version } from '../../package.json';
 import { cacheStats, clearAudioCache, onCacheChange, type CacheStats } from '../lib/audio-cache';
 import { toast } from '../lib/toast';
 import GitHubMark from './GitHubMark';
@@ -22,6 +25,7 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
   const [source, setSource] = useState<string | null>(null);
   const [proxy, setProxy] = useState('');
   const [testing, setTesting] = useState(false);
+  const [route, setRoute] = useState<string>('Not detected yet');
 
   const refreshStats = () => void cacheStats().then(setStats);
 
@@ -30,6 +34,7 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     setClientId(getCustomClientId() ?? '');
     setProxy(getApiProxy());
     setSource(getClientIdSource());
+    setRoute(getActiveRouteLabel());
     // warm detection in the background so the status line is truthful
     detectClientId()
       .then(() => setSource(getClientIdSource()))
@@ -78,6 +83,7 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
         toast('Connection OK — api-v2 responded.');
       }
       setSource(getClientIdSource());
+      setRoute(getActiveRouteLabel());
     } catch (err) {
       if (err instanceof ClientIdUnavailableError) toast('Could not detect a client_id. Paste one below.');
       else toast(err instanceof Error ? err.message : 'Connection test failed.');
@@ -108,7 +114,20 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
             <p className="modal-status">
               <span className="status-label">client_id</span> {sourceLabel}
             </p>
+            <p className="modal-status">
+              <span className="status-label">route</span> {route}
+            </p>
             <p className="modal-help">
+              SoundCloud often blocks direct browser requests, so every request walks a route chain:
+              your custom proxy (if set) &rarr; the route that worked last time &rarr; direct &rarr;
+              corsproxy.io &rarr; api.cors.lol &rarr; api.allorigins.win. The one that answers first is
+              <strong> remembered</strong> and used from then on. If it ever stops working, JACos
+              falls back automatically and remembers the new one.
+            </p>
+            <button className="btn btn-ghost btn-sm" onClick={() => { clearActiveRoute(); setRoute(getActiveRouteLabel()); toast('Route memory cleared — the chain will be re-probed on the next request.'); }} style={{ marginBottom: 4 }}>
+              Forget remembered route
+            </button>
+            <p className="modal-help" style={{ marginTop: 10 }}>
               SoundCloud has no public API keys, so JACos detects the same client_id the web player uses.
               Detection normally just works. If it doesn&rsquo;t (or expires), open soundcloud.com in a tab,
               watch any api-v2 request in DevTools → Network and copy the <code>client_id</code> query parameter.
@@ -130,8 +149,8 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
               {testing ? 'Testing…' : 'Test connection'}
             </button>
 
-            <label className="field-label" htmlFor="proxy-input" style={{ marginTop: 18 }}>API proxy base (advanced)</label>
-            <p className="modal-help">Only needed if direct requests to api-v2.soundcloud.com are blocked on your network. Requests are sent as <code>PROXY?url=&lt;encoded&gt;</code>.</p>
+            <label className="field-label" htmlFor="proxy-input" style={{ marginTop: 18 }}>Custom CORS proxy (advanced)</label>
+            <p className="modal-help">Optional. Tried before everything else. Requests are sent as <code>PROXY?url=&lt;encoded&gt;</code>. If your proxy stops working, JACos falls back to the chain automatically. Leave empty to use the automatic chain.</p>
             <div className="field-row">
               <input
                 id="proxy-input"
@@ -151,8 +170,8 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
             <h3>Audio cache</h3>
             <p className="modal-help">
               Songs stream from SoundCloud&rsquo;s CDN exactly as on the real site. The first play downloads the
-              MP3 once into your browser&rsquo;s <strong>Cache Storage</strong> — nothing is written to disk, and the
-              cache is capped (40 tracks / 256&nbsp;MB, oldest evicted automatically). Replays come straight from cache.
+              MP3 once into your browser&rsquo;s <strong>Cache Storage</strong> — capped at
+              40 tracks / 256&nbsp;MB, oldest evicted automatically. Replays come straight from cache.
             </p>
             <div className="cache-row">
               <div className="cache-stat">
@@ -173,7 +192,7 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
           <section className="modal-section">
             <h3>About</h3>
             <p className="modal-help" style={{ marginBottom: 12 }}>
-              JACo&rsquo;s Soundcloud is open source (MIT) and made by Buffer. Not affiliated with SoundCloud AB.
+              JACo&rsquo;s Soundcloud v{version} — open source (MIT), made by Buffer. Not affiliated with SoundCloud AB.
             </p>
             <a className="btn btn-dark btn-sm" href={GITHUB_URL} target="_blank" rel="noreferrer">
               <GitHubMark size={15} /> View on GitHub

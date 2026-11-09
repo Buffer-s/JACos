@@ -35,6 +35,12 @@ Open an issue at https://github.com/bufferclick/JACos/issues with:
 - what happened vs. what you expected,
 - browser + console output if playback was involved.
 
+## Versioning & release PRs
+
+- Every update ships as its own PR titled with its version (e.g. `v0.0.2`).
+- Bump the version by **0.0.1** per update; when a bump would reach `0.0.10`, roll to the next minor (`0.0.9` → `0.1.0`).
+- Keep `package.json`, the README version badge, and the in-app footer (which reads `package.json`) in sync in the same PR.
+
 ## Pull requests
 
 1. Fork and branch from `main`.

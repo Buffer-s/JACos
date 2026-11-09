@@ -1,28 +1,23 @@
-<p align="center">
-  <img src="public/og.png" alt="JACo's Soundcloud — Just Another Copy of Sweden's Soundcloud" width="720" />
-</p>
-
 <h1 align="center">JACo's Soundcloud</h1>
 <p align="center"><strong>Just Another Copy of Sweden's Soundcloud</strong></p>
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-ff5500.svg"></a>
   <img alt="Made by Buffer" src="https://img.shields.io/badge/made%20by-Buffer-333333.svg">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.0.1-ff5500.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.0.2-ff5500.svg">
 </p>
 
 JACo's Soundcloud (**JACos**) is an open-source, account-free SoundCloud web client.
 Paste a public SoundCloud profile or playlist URL and JACos lists everything the user published — then plays it, directly in your browser.
 
-No account. No sign-in. No files written to disk.
-
-## Features (v0.0.1)
+## Features (v0.0.2)
 
 - **URL-first.** Paste `soundcloud.com/<user>`, a `/sets/<playlist>` link, an `snd.sc` short link, or a bare `@handle`. JACos resolves it and takes you there.
 - **Playlist listing.** Every public playlist of the user, in a faithful SoundCloud-style grid — tracks count, likes, last-updated.
 - **Playlists & tracks.** Full tracklist with deterministic waveforms, likes, play counts, duration and the classic orange play/pause states.
 - **Real playback.** Streams from SoundCloud's own CDN (progressive MP3 preferred, HLS via hls.js as fallback).
-- **Browser-native caching.** The first play stores the MP3 once in your browser's **Cache Storage** (LRU, capped at 40 tracks / 256 MB). Replays come from cache. **Nothing is ever written to disk.**
+- **Browser-native caching.** The first play stores the MP3 once in your browser's **Cache Storage** (LRU, capped at 40 tracks / 256 MB). Replays come from cache.
 - **Media Session + keyboard.** Lock-screen controls, <kbd>Space</kbd> play/pause, <kbd>←</kbd>/<kbd>→</kbd> seek, <kbd>↑</kbd>/<kbd>↓</kbd> volume, <kbd>L</kbd> like.
+- **Automatic route failover.** If direct SoundCloud requests are blocked, JACos walks the route chain (direct → public CORS proxies) and remembers the one that works.
 - **Open source.** MIT-licensed. Made by Buffer.
 
 ## Quick start
@@ -75,8 +70,22 @@ and it rotates periodically. JACos resolves it like this, in order:
 5. **Manual entry** — if all else fails, the UI asks you to paste a client_id from your own DevTools session (steps are in Settings).
 
 A stale id yields a `401`; JACos detects that, drops the cached id and re-detects once transparently.
-If your network blocks direct requests to SoundCloud entirely, set a **CORS proxy base** in
-Settings (requests are sent as `PROXY?url=<encoded URL>`).
+
+### Routing & CORS (automatic)
+
+SoundCloud frequently refuses direct browser requests, so **every** request walks a route chain:
+
+1. **Your custom CORS proxy**, if you set one in Settings (tried first).
+2. **The route that worked last time**, remembered in localStorage (`jacos:api_route`).
+3. **Direct** connection to `api-v2.soundcloud.com`.
+4. **Public CORS proxies**, in order: `corsproxy.io` → `api.cors.lol` → `api.allorigins.win`.
+
+Each candidate is validated before its response is accepted (JSON sniffing for the API, content
+markers for the homepage scrape), so proxy error pages fall through to the next route instead of
+surfacing as bogus failures. The route that answers first is **remembered** and tried first from
+then on — that's the "remembers the one that works for you" bit. If it stops working, JACos skips
+to the next route automatically and remembers the new winner. **Settings → SoundCloud connection**
+shows the current route, can forget the remembered one, and can run a connection test.
 
 ### Caching, not downloading
 
@@ -96,7 +105,8 @@ Everything lives in **Settings** (gear icon in the top bar) or localStorage unde
 | Setting                    | Storage key            | Default       |
 | -------------------------- | ---------------------- | ------------- |
 | Custom client_id           | `jacos:client_id_override` | auto-detect  |
-| API proxy base (advanced)  | `jacos:api_proxy`      | *(none)*      |
+| Custom CORS proxy (advanced) | `jacos:api_proxy`    | *(none)*      |
+| Remembered route           | `jacos:api_route`          | *(auto)*      |
 | Liked tracks (local only)  | `jacos:liked`          | `[]`          |
 | Volume / mute              | `jacos:volume`, `jacos:muted` | `0.8` / off |
 | Shuffle / repeat           | `jacos:shuffle`, `jacos:repeat` | off / off  |
@@ -106,6 +116,15 @@ Everything lives in **Settings** (gear icon in the top bar) or localStorage unde
 
 `dist/` is fully static — drop it on any static host (GitHub Pages, Netlify, Cloudflare Pages,
 a plain nginx). The build uses relative asset paths, so hosting under a sub-path works too.
+
+## Versioning & releases
+
+JACos uses a simple rolling scheme:
+
+- Every update gets **its own PR** titled with its version (e.g. `v0.0.2`) and merges into `main`.
+- Each update bumps the version by **0.0.1** (`0.0.1` → `0.0.2` → …).
+- When a bump would reach `0.0.10`, it rolls to the next minor instead: `0.0.8` → `0.0.9` → **`0.1.0`**. No `0.0.10` exists.
+- The canonical version lives in `package.json` (single source of truth), is shown in the app footer and Settings → About, and the README badge matches it. Keep all three in sync in release PRs.
 
 ## Legal
 
