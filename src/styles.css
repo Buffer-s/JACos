@@ -147,9 +147,9 @@ body.has-player .footer { margin-bottom: 64px; }
    Hero (home)
    ------------------------------------------------------------ */
 .hero {
-  display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 56px; align-items: center;
-  padding: 44px 16px 48px; max-width: 1240px; margin: 0 auto;
+  padding: 60px 16px 52px; max-width: 1240px; margin: 0 auto;
 }
+.hero-copy-col { max-width: 860px; }
 .hero-eyebrow { display: flex; align-items: center; gap: 16px; }
 .hero-wordmark { display: flex; flex-direction: column; line-height: 0.98; }
 .hero-jacos { font-size: 47px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); }
@@ -174,46 +174,6 @@ body.has-player .footer { margin-bottom: 64px; }
 .hero-examples { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; font-size: 12.5px; color: var(--text-secondary); }
 .hero-recents { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--text-secondary); }
 
-/* hero product mock — pure CSS, no image assets */
-.hero-mock { display: flex; flex-direction: column; }
-.mock-window {
-  background: #fff; border: 1px solid #e4e4e4; border-radius: var(--radius-lg);
-  box-shadow: 0 30px 60px -18px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
-}
-.mock-chrome { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid #ececec; background: #fcfcfc; }
-.mock-dot { width: 9px; height: 9px; border-radius: 50%; background: #d4d4d4; }
-.mock-address {
-  margin-left: 8px; flex: 1; background: var(--panel-grey); border-radius: var(--radius-sm);
-  font-size: 10px; color: #8a8a8a; padding: 4px 10px; font-family: var(--mono);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.mock-body { display: grid; grid-template-columns: 122px 1fr; gap: 16px; padding: 16px; }
-.mock-art {
-  width: 96px; height: 96px; border-radius: var(--radius);
-  background: linear-gradient(155deg, #ff6a00 0%, #e64d00 100%);
-  display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm);
-}
-.mock-line { background: #ededed; border-radius: 3px; height: 11px; margin-top: 8px; }
-.mock-line.w40 { width: 40%; } .mock-line.w45 { width: 45%; } .mock-line.w60 { width: 60%; }
-.mock-line.w70 { width: 70%; } .mock-line.w90 { width: 90%; }
-.mock-line.h9 { height: 9px; } .mock-line.h10 { height: 10px; } .mock-line.h12 { height: 12px; } .mock-line.h16 { height: 16px; }
-.mock-line.mt8 { margin-top: 12px; }
-.mock-line.is-live { background: #ffcdb8; }
-.mock-playbtn {
-  margin-top: 12px; width: 40px; height: 40px; border-radius: 50%; background: var(--orange);
-  display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(255, 85, 0, .45);
-}
-.mock-tracks { display: flex; flex-direction: column; }
-.mock-row { display: flex; align-items: center; gap: 10px; padding: 6.5px 2px; border-bottom: 1px solid #f1f1f1; }
-.mock-row:last-child { border-bottom: 0; }
-.mock-rnum { width: 16px; font-size: 11px; color: #c2c2c2; text-align: center; font-variant-numeric: tabular-nums; }
-.mock-rnum.is-live { color: var(--orange); font-weight: 800; }
-.mock-rmain { flex: 1; min-width: 0; }
-.mock-rwave { display: flex; align-items: flex-end; gap: 1.6px; height: 32px; width: 108px; }
-.mock-rwave i { flex: 1; background: #e0e0e0; border-radius: 1px; display: block; }
-.mock-rwave i.is-played { background: var(--orange); }
-.mock-caption { margin: 12px 4px 0; text-align: center; font-size: 12px; color: var(--text-secondary); }
 
 /* ------------------------------------------------------------
    How it works
@@ -581,8 +541,7 @@ body.has-player .footer { margin-bottom: 64px; }
   .track-row { grid-template-columns: 30px 44px minmax(0, 1fr) 64px 56px; }
 }
 @media (max-width: 980px) {
-  .hero { grid-template-columns: 1fr; gap: 36px; padding-top: 30px; }
-  .hero-mock { max-width: 520px; }
+  .hero { padding-top: 36px; }
   .playlist-layout { grid-template-columns: 1fr; gap: 26px; }
   .playlist-art { max-width: 340px; }
   .how-steps { grid-template-columns: 1fr; }
