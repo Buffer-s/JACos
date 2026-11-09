@@ -1,5 +1,6 @@
 import { usePlayer, type PlaySource } from '../state/PlayerContext';
 import Waveform from './Waveform';
+import AddToPlaylistButton from './AddToPlaylistButton';
 import { artwork, type SCTrack } from '../lib/soundcloud';
 import { fmtCount, fmtDuration } from '../lib/format';
 import Artwork from './Artwork';
@@ -13,11 +14,14 @@ export default function TrackRow({
   index,
   queueTracks,
   source,
+  onRemove,
 }: {
   track: SCTrack;
   index: number;
   queueTracks: SCTrack[];
   source: PlaySource;
+  /** when set, shows an X that removes the track (e.g. from a local playlist) instead of add-to-playlist */
+  onRemove?: () => void;
 }) {
   const { current, status, toggle, playQueue, liked, toggleLike, source: playSource } = usePlayer();
 
@@ -86,7 +90,7 @@ export default function TrackRow({
 
       <button
         className={`like-btn${isLiked ? ' is-liked' : ''}`}
-        onClick={() => toggleLike(track.id)}
+        onClick={() => toggleLike(track)}
         aria-pressed={isLiked}
         aria-label={isLiked ? 'Unlike' : 'Like'}
         title={isLiked ? 'Unlike' : 'Like'}
@@ -104,6 +108,16 @@ export default function TrackRow({
       </button>
 
       <div className="track-time">{fmtDuration(track.duration)}</div>
+
+      <div className="track-action-cell">
+        {onRemove ? (
+          <button className="track-action" onClick={onRemove} aria-label="Remove from this playlist" title="Remove from this playlist">
+            <svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><path d="M5 5l8 8M13 5l-8 8"/></svg>
+          </button>
+        ) : (
+          <AddToPlaylistButton track={track} />
+        )}
+      </div>
     </div>
   );
 }

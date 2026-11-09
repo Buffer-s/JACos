@@ -9,8 +9,16 @@
       content="Paste a public SoundCloud profile or playlist URL and stream every track in your browser. Open source under the MIT license, made by Buffer."
     />
     <meta name="theme-color" content="#ff5500" />
-    <meta name="generator" content="JACos v0.0.4" />
+    <meta name="generator" content="JACos v0.0.5" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script>
+      try {
+        var pref = localStorage.getItem('jacos:theme');
+        var dark = pref === 'dark' || (pref !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      } catch (e) { /* default light */ }
+    </script>
     <meta property="og:title" content="JACo's Soundcloud — Just Another Copy of Sweden's Soundcloud" />
     <meta property="og:description" content="Paste a SoundCloud URL, stream the playlist. Open source, made by Buffer." />
     <meta property="og:type" content="website" />
