@@ -3,14 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>JACo's Soundcloud — Just Another Copy of Sweden's Soundcloud</title>
+    <title>JACo's — Free, Ad-Free SoundCloud (Open Source)</title>
     <meta
       name="description"
-      content="Paste a public SoundCloud profile or playlist URL and stream every track in your browser. Open source under the MIT license, made by Buffer."
+      content="Free, ad-free, open-source SoundCloud player: search the full catalog, stream tracks and playlists, like songs and download MP3s. No signup."
     />
+    <meta
+      name="keywords"
+      content="jacos, jaco's soundcloud, free soundcloud, ad free soundcloud, soundcloud without ads, soundcloud no ads, open source soundcloud, soundcloud alternative, soundcloud web player, soundcloud player, free music streaming, ad-free music streaming, stream soundcloud free, soundcloud downloader, download soundcloud mp3, soundcloud mp3 download, online music player, free music player, listen to soundcloud, music streaming no signup, free music online, open source music player, soundcloud client, unblocked soundcloud, soundcloud unblocked, music web player, free audio streaming, stream music free, soundcloud search, alternative music streaming, free streaming service, no ads music player, jaco music, jacos player, buffer soundcloud, jaco.s soundcloud, just another copy of sweden's soundcloud, soundcloud desktop alternative, browser music player"
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://jac-os.pages.dev/" />
     <meta name="theme-color" content="#ff5500" />
-    <meta name="generator" content="JACos v0.0.6" />
+    <meta name="generator" content="JACos v0.0.7" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "JACo's",
+        "url": "https://jac-os.pages.dev/",
+        "description": "Free, ad-free, open-source SoundCloud player: search the full catalog, stream tracks and playlists, like songs and download MP3s. No signup.",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "license": "https://opensource.org/licenses/MIT",
+        "codeRepository": "https://github.com/bufferclick/JACos",
+        "author": { "@type": "Organization", "name": "Buffer" }
+      }
+    </script>
     <script>
       try {
         var pref = localStorage.getItem('jacos:theme');
@@ -19,15 +41,17 @@
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
       } catch (e) { /* default light */ }
     </script>
-    <meta property="og:title" content="JACo's Soundcloud — Just Another Copy of Sweden's Soundcloud" />
-    <meta property="og:description" content="Paste a SoundCloud URL, stream the playlist. Open source, made by Buffer." />
+    <meta property="og:title" content="JACo's — Free, Ad-Free SoundCloud (Open Source)" />
+    <meta property="og:description" content="Search the full SoundCloud catalog and stream tracks, playlists and people — free, ad-free and open source. Made by Buffer." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="./og.png" />
+    <meta property="og:url" content="https://jac-os.pages.dev/" />
+    <meta property="og:image" content="https://jac-os.pages.dev/og.png" />
     <meta property="og:site_name" content="JACo's Soundcloud" />
+    <meta property="og:locale" content="en_US" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="JACo's Soundcloud" />
-    <meta name="twitter:description" content="Just Another Copy of Sweden's Soundcloud — paste a URL, stream the playlists." />
-    <meta name="twitter:image" content="./og.png" />
+    <meta name="twitter:title" content="JACo's — Free, Ad-Free SoundCloud" />
+    <meta name="twitter:description" content="Open source, ad-free SoundCloud in your browser. Search everything, stream anything, download MP3s." />
+    <meta name="twitter:image" content="https://jac-os.pages.dev/og.png" />
   </head>
   <body>
     <div id="root"></div>

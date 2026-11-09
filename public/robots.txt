@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://jac-os.pages.dev/sitemap.xml
