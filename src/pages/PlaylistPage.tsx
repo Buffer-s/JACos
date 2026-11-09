@@ -108,7 +108,7 @@ export default function PlaylistPage({ id }: { id: number }) {
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(playlist.permalink_url);
+      await navigator.clipboard.writeText(playlist.permalink_url ?? `https://soundcloud.com/playlists/${playlist.id}`);
       toast('Playlist link copied.');
     } catch {
       toast('Could not copy to clipboard.');

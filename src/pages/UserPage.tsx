@@ -91,6 +91,7 @@ export default function UserPage({ permalink }: { permalink: string }) {
   }
 
   const { user, playlists, tracks } = state;
+  const trackCount = user.track_count ?? 0;
   const avatarSrc = avatar(user.avatar_url, 't120x120') ?? undefined;
   const tracksSource: PlaySource = { type: 'tracks', id: user.id, title: `${user.username} — uploads` };
 
@@ -152,8 +153,8 @@ export default function UserPage({ permalink }: { permalink: string }) {
         ) : (
           <div className="empty-panel">
             <h2>No public playlists yet</h2>
-            <p>{user.username} hasn&rsquo;t published any public playlists. {user.track_count > 0 ? `They do have ${user.track_count} track${user.track_count === 1 ? '' : 's'} uploaded.` : ''}</p>
-            {user.track_count > 0 && (
+            <p>{user.username} hasn&rsquo;t published any public playlists. {trackCount > 0 ? `They do have ${trackCount} track${trackCount === 1 ? '' : 's'} uploaded.` : ''}</p>
+            {trackCount > 0 && (
               <button className="btn btn-orange-solid btn-sm" onClick={() => setTab('tracks')}>See their tracks</button>
             )}
           </div>
