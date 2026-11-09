@@ -2,16 +2,15 @@ import { useEffect, useState } from 'react';
 import Logo from './Logo';
 import GitHubMark from './GitHubMark';
 import SettingsModal from './SettingsModal';
-import { parseQuery } from '../lib/query';
+import { parseQuery, looksLikeSoundCloudInput } from '../lib/query';
 import { resolveUrl, ClientIdUnavailableError, ApiError } from '../lib/soundcloud';
-import { useHashRoute, navigate } from '../lib/router';
+import { navigate } from '../lib/router';
 import { toast } from '../lib/toast';
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme';
 
 export const GITHUB_URL = 'https://github.com/bufferclick/JACos';
 
 export default function TopNav() {
-  const route = useHashRoute();
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -25,10 +24,17 @@ export default function TopNav() {
 
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const parsed = parseQuery(query);
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    // plain words search SoundCloud; URLs and @handles resolve
+    if (!looksLikeSoundCloudInput(trimmed)) {
+      setQuery('');
+      navigate(`/search/${encodeURIComponent(trimmed)}`);
+      return;
+    }
+    const parsed = parseQuery(trimmed);
     if (parsed.kind !== 'url') {
-      const q = query.trim();
-      if (q) navigate(`/search/${encodeURIComponent(q)}`);
+      toast('That doesn’t look like a SoundCloud URL.');
       return;
     }
     setBusy(true);
@@ -67,10 +73,6 @@ export default function TopNav() {
       <header className="topnav">
         <div className="topnav-inner">
           <Logo size={40} />
-          <nav className="topnav-nav" aria-label="Primary">
-            <a href="#/" className={`nav-link${route.name === 'home' ? ' is-active' : ''}`}>Home</a>
-          </nav>
-
           <form className="search" role="search" onSubmit={(e) => void submit(e)}>
             <svg className="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <circle cx="7" cy="7" r="5.2" stroke="currentColor" strokeWidth="1.6" />
@@ -97,7 +99,6 @@ export default function TopNav() {
                 const next = order[(order.indexOf(theme) + 1) % order.length];
                 setThemePref(next);
                 setTheme(next);
-                toast(next === 'system' ? 'Theme: follows your system.' : `Theme: ${next}.`);
               }}
               aria-label={`Theme: ${theme}. Click to change.`}
               title={`Theme: ${theme} (click to cycle system / light / dark)`}

@@ -529,22 +529,38 @@ export async function getPlaylist(id: number): Promise<SCPlaylist> {
     const raw = await apiFetch<any>(`/playlists/${id}`);
     if (!raw || raw.kind !== 'playlist') throw new Error('Playlist not found.');
     const rawTracks: unknown[] = Array.isArray(raw.tracks) ? raw.tracks : [];
-    // SoundCloud sometimes lists track ids instead of objects — hydrate in batches of 30
-    const ids = rawTracks.filter((t): t is number => typeof t === 'number');
-    const hydrated = rawTracks.filter((t): t is SCTrack => !!t && typeof t === 'object');
-    const byId = new Map(hydrated.map((t) => [t.id, t]));
-    for (let i = 0; i < ids.length; i += 30) {
+    // SoundCloud playlists list tracks as either bare ids OR stub objects
+    // ({id, permalink, ...} with no duration/media). Anything missing the
+    // fields we need gets batch-hydrated via /tracks?ids= (chunks of 30).
+    const byId = new Map<number, any>();
+    const needIds: number[] = [];
+    for (const t of rawTracks) {
+      if (typeof t === 'number' && Number.isFinite(t)) {
+        needIds.push(t);
+        continue;
+      }
+      if (t && typeof t === 'object' && typeof (t as any).id === 'number') {
+        const trk = t as any;
+        byId.set(trk.id, trk);
+        if (typeof trk.duration !== 'number' || !trk.media) needIds.push(trk.id);
+      }
+    }
+    const uniqueIds = [...new Set(needIds)];
+    for (let i = 0; i < uniqueIds.length; i += 30) {
       try {
-        const res = await apiFetch<any>('/tracks', { ids: ids.slice(i, i + 30).join(',') });
+        const res = await apiFetch<any>('/tracks', { ids: uniqueIds.slice(i, i + 30).join(',') });
         for (const t of collectionOf(res)) {
           if (t && typeof t.id === 'number') byId.set(t.id, t);
         }
       } catch {
-        /* keep the partial list */
+        /* keep whatever the stubs gave us */
       }
     }
     const tracks = rawTracks
-      .map((t) => (typeof t === 'number' ? byId.get(t) : (t as SCTrack)))
+      .map((t) => {
+        const id = typeof t === 'number' ? t : (t as any)?.id;
+        return typeof id === 'number' ? byId.get(id) : undefined;
+      })
       .filter((t): t is SCTrack => !!t && typeof (t as SCTrack).duration === 'number');
     return mapPlaylist({ ...raw, tracks } as SCPlaylist);
   });
@@ -566,6 +582,30 @@ function rankTranscoding(t: SCTranscoding): number {
   if (proto === 'hls' && mime.includes('mpegurl')) return 4;
   if (proto === 'progressive') return 5;
   return 50; // opus and friends — not universally playable
+}
+
+/**
+ * Progressive-only stream resolution, used when saving a track to a file.
+ * Returns null when the track has no direct-MP3 transcoding (HLS-only).
+ */
+export async function getProgressiveStreamUrl(track: SCTrack): Promise<string | null> {
+  if (!track || typeof track.id !== 'number') return null;
+  const transcodings = track.media?.transcodings ?? [];
+  const candidates = transcodings
+    .filter((t) => t.format?.protocol === 'progressive' && !t.snipped)
+    .sort((a, b) => rankTranscoding(a) - rankTranscoding(b));
+  for (const t of candidates) {
+    try {
+      const res = await apiFetch<{ url?: string }>(
+        t.url,
+        track.track_authorization ? { track_authorization: track.track_authorization } : {},
+      );
+      if (res?.url) return res.url;
+    } catch {
+      /* try the next transcoding */
+    }
+  }
+  return null;
 }
 
 export async function getStreamUrl(track: SCTrack): Promise<StreamInfo | null> {
