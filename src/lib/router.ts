@@ -4,6 +4,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'user'; permalink: string }
   | { name: 'playlist'; id: number }
+  | { name: 'resolve'; scPath: string }
   | { name: 'notfound' };
 
 export function parseHash(hash: string): Route {
@@ -12,6 +13,7 @@ export function parseHash(hash: string): Route {
   if (segs.length === 0) return { name: 'home' };
   if (segs[0] === 'user' && segs[1]) return { name: 'user', permalink: decodeURIComponent(segs[1]) };
   if (segs[0] === 'playlist' && segs[1] && /^\d+$/.test(segs[1])) return { name: 'playlist', id: Number(segs[1]) };
+  if (segs[0] === 'resolve' && segs.length > 1) return { name: 'resolve', scPath: segs.slice(1).map(decodeURIComponent).join('/') };
   return { name: 'notfound' };
 }
 

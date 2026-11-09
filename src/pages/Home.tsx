@@ -41,8 +41,8 @@ export default function Home() {
         navigate(uploader ? `/user/${encodeURIComponent(uploader)}` : '/');
       } else toast('Could not resolve that URL.');
     } catch (err) {
-      if (err instanceof ClientIdUnavailableError || (err instanceof ApiError && err.status === 0)) {
-        toast('Couldn’t reach SoundCloud. Open Settings to check the connection / set a proxy.', {
+      if (err instanceof ClientIdUnavailableError || (err instanceof ApiError && [0, 401, 403].includes(err.status))) {
+        toast('Couldn’t load this from SoundCloud. Open Settings to fix the connection.', {
           actionLabel: 'Settings',
           onAction: openSettings,
         });

@@ -10,6 +10,7 @@ import Home from './pages/Home';
 import UserPage from './pages/UserPage';
 import PlaylistPage from './pages/PlaylistPage';
 import NotFound from './pages/NotFound';
+import ResolvePage from './pages/ResolvePage';
 
 function Routed() {
   const route = useHashRoute();
@@ -20,6 +21,8 @@ function Routed() {
       return <UserPage key={route.permalink} permalink={route.permalink} />;
     case 'playlist':
       return <PlaylistPage key={route.id} id={route.id} />;
+    case 'resolve':
+      return <ResolvePage key={route.scPath} scPath={route.scPath} />;
     default:
       return <NotFound />;
   }

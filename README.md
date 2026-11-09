@@ -3,13 +3,13 @@
 <p align="center">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-ff5500.svg"></a>
   <img alt="Made by Buffer" src="https://img.shields.io/badge/made%20by-Buffer-333333.svg">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.0.2-ff5500.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.0.3-ff5500.svg">
 </p>
 
 JACo's Soundcloud (**JACos**) is an open-source, account-free SoundCloud web client.
 Paste a public SoundCloud profile or playlist URL and JACos lists everything the user published — then plays it, directly in your browser.
 
-## Features (v0.0.2)
+## Features (v0.0.3)
 
 - **URL-first.** Paste `soundcloud.com/<user>`, a `/sets/<playlist>` link, an `snd.sc` short link, or a bare `@handle`. JACos resolves it and takes you there.
 - **Playlist listing.** Every public playlist of the user, in a faithful SoundCloud-style grid — tracks count, likes, last-updated.
@@ -40,6 +40,9 @@ Other scripts: `npm run typecheck` (tsc), `npm run build` (vite), `npm run previ
 
 ## Using the app
 
+**Link-style URLs.** `https://jac-os.pages.dev/<user>` (and even `/<user>/sets/<name>`) work directly — the path is resolved against SoundCloud and you land on the matching profile or playlist. Implemented with a `_redirects` SPA fallback plus a one-time boot-time resolver.
+
+
 1. Open the site.
 2. Paste a profile URL — e.g. `soundcloud.com/bfrend` — into the search bar or the hero field and hit **Find playlists**.
 3. You land on the profile: avatar, bio, stats, and tabs for **Playlists** and **Tracks**.
@@ -69,7 +72,9 @@ and it rotates periodically. JACos resolves it like this, in order:
 4. **Community fallback ids** — tried only if detection fails; they are usually stale.
 5. **Manual entry** — if all else fails, the UI asks you to paste a client_id from your own DevTools session (steps are in Settings).
 
-A stale id yields a `401`; JACos detects that, drops the cached id and re-detects once transparently.
+**Verification.** Every detected id — cached, scraped, or community — is probed against the API (`/resolve` on a known-good profile) *before* being used, so a stale id never reaches your requests. If a cached id stops verifying, it's discarded and re-detected. Only your own custom id is used unverified.
+
+A stale id that somehow slips through yields a `401`; JACos detects that, drops the cached id and re-detects once transparently.
 
 ### Routing & CORS (automatic)
 
