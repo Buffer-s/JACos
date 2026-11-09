@@ -61,3 +61,15 @@ export function permalinkFromUrl(url: string): string | null {
 function hostIsSndSc(host: string): boolean {
   return host.toLowerCase().replace(/^www\./, '') === 'snd.sc';
 }
+
+/**
+ * True when the input should be treated as a SoundCloud URL/handle rather
+ * than a search query. Anything else (plain words, questions, multi-word)
+ * goes to the search page.
+ */
+export function looksLikeSoundCloudInput(raw: string): boolean {
+  const input = raw.trim();
+  if (!input) return false;
+  if (input.startsWith('@')) return true; // @handle
+  return /soundcloud\.com|snd\.sc/i.test(input);
+}

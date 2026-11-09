@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { parseQuery } from '../lib/query';
+import { parseQuery, looksLikeSoundCloudInput } from '../lib/query';
 import { resolveUrl, ClientIdUnavailableError, ApiError } from '../lib/soundcloud';
 import { navigate, openSettings } from '../lib/router';
 import { toast } from '../lib/toast';
@@ -26,10 +26,15 @@ export default function Home() {
   }, []);
 
   const go = async (raw: string) => {
-    const parsed = parseQuery(raw);
-    if (parsed.kind !== 'url') {
-      const q = raw.trim();
+    const trimmed = raw.trim();
+    if (!looksLikeSoundCloudInput(trimmed)) {
+      const q = trimmed;
       if (q) navigate(`/search/${encodeURIComponent(q)}`);
+      return;
+    }
+    const parsed = parseQuery(trimmed);
+    if (parsed.kind !== 'url') {
+      toast('That doesn’t look like a SoundCloud URL.');
       return;
     }
     setBusy(true);
@@ -69,8 +74,8 @@ export default function Home() {
           </div>
           <p className="hero-tagline">Just Another Copy of Sweden&rsquo;s Soundcloud</p>
           <p className="hero-copy">
-            Paste a public SoundCloud profile or playlist URL and play what they publish —
-            streamed from SoundCloud&rsquo;s own CDN.
+            Search the whole SoundCloud catalog — tracks, playlists, people — or paste a URL.
+            All of it streams from SoundCloud&rsquo;s own CDN.
           </p>
 
           <form
@@ -94,7 +99,7 @@ export default function Home() {
             />
             <button type="submit" className="btn btn-orange-solid hero-cta" disabled={busy}>
               {busy ? <span className="btn-spinner" aria-hidden="true" /> : null}
-              {busy ? 'Resolving…' : 'Find playlists'}
+              {busy ? 'Resolving…' : 'Search'}
             </button>
           </form>
 

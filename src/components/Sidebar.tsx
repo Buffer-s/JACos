@@ -10,6 +10,7 @@ import {
 import { artwork } from '../lib/soundcloud';
 import { fmtDuration } from '../lib/format';
 import { toast } from '../lib/toast';
+import { usePlayer } from '../state/PlayerContext';
 
 /**
  * SoundCloud-style right-hand column: your likes and your local playlists.
@@ -17,6 +18,7 @@ import { toast } from '../lib/toast';
  */
 export default function Sidebar() {
   const route = useHashRoute();
+  const { playQueue } = usePlayer();
   const [tick, setTick] = useState(0);
   const [name, setName] = useState('');
 
@@ -62,7 +64,7 @@ export default function Sidebar() {
           <ul className="sidebar-list">
             {recentLikes.map((t) => (
               <li key={t.id}>
-                <button className="sidebar-track" onClick={() => navigate(t.user ? `/user/${encodeURIComponent(t.user.permalink)}` : '/')} title={t.title}>
+                <button className="sidebar-track" onClick={() => playQueue(liked, liked.indexOf(t), { type: 'tracks', id: 2_000_000_001, title: 'Likes' })} title={`Play “${t.title}”`}>
                   <span className="sidebar-art" aria-hidden="true">
                     {artwork(t.artwork_url, 't120x120')
                       ? <img src={artwork(t.artwork_url, 't120x120') ?? undefined} alt="" width={40} height={40} loading="lazy" />

@@ -4,6 +4,7 @@ import { artwork } from '../lib/soundcloud';
 import { navigate } from '../lib/router';
 import { TrackArtwork } from './TrackRow';
 import AddToPlaylistButton from './AddToPlaylistButton';
+import DownloadButton from './DownloadButton';
 
 /** seconds -> "m:ss" */
 function fmtClock(total: number): string {
@@ -43,6 +44,8 @@ export default function PlayerBar() {
   } = usePlayer();
 
   const [progress, setProgress] = useState(0);
+  /** fraction while the user is dragging the seek bar; null otherwise */
+  const [seeking, setSeeking] = useState<number | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
@@ -71,10 +74,16 @@ export default function PlayerBar() {
     return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
   }, []);
 
-  const onSeek = useCallback(
+  const previewSeek = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => setSeeking(fractionFromEvent(e)),
+    [fractionFromEvent],
+  );
+
+  const commitSeek = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : duration;
       if (dur > 0) seekTo(fractionFromEvent(e) * dur);
+      setSeeking(null);
     },
     [audio, duration, seekTo, fractionFromEvent],
   );
@@ -105,23 +114,25 @@ export default function PlayerBar() {
         aria-label="Seek"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={Math.round(progress * 100)}
+        aria-valuenow={Math.round((seeking ?? progress) * 100)}
         onPointerDown={(e) => {
           draggingRef.current = true;
           (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-          onSeek(e);
+          previewSeek(e);
         }}
         onPointerMove={(e) => {
-          if (draggingRef.current) onSeek(e);
+          if (draggingRef.current) previewSeek(e);
         }}
-        onPointerUp={() => {
+        onPointerUp={(e) => {
+          if (draggingRef.current) commitSeek(e);
           draggingRef.current = false;
         }}
         onPointerCancel={() => {
           draggingRef.current = false;
+          setSeeking(null);
         }}
       >
-        <div className="pb-progress-fill" style={{ width: `${progress * 100}%` }} />
+        <div className="pb-progress-fill" style={{ width: `${(seeking ?? progress) * 100}%` }} />
       </div>
 
       <div className="pb-inner">
@@ -172,6 +183,7 @@ export default function PlayerBar() {
 
         {/* ---- right side: like, clock, volume ---- */}
         <div className="pb-right">
+          <DownloadButton track={current} size="bar" />
           <AddToPlaylistButton track={current} size="bar" />
           <button className={`pb-icon${isLiked ? ' is-on' : ''}`} onClick={() => toggleLike(current)} aria-label={isLiked ? 'Unlike' : 'Like'} aria-pressed={isLiked} title={isLiked ? 'Unlike' : 'Like'}>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
