@@ -227,7 +227,7 @@ const validators: Record<BodyKind, (body: string) => boolean> = {
       return false;
     }
   },
-  html: (body) => body.includes('a-v2.sndcdn.com'),
+  html: (body) => body.length > 2000,
   js: (body) => body.length > 3000,
 };
 
@@ -276,32 +276,69 @@ async function fetchText(url: string, kind: 'html' | 'js'): Promise<string> {
 
 /** Try to scrape a live client_id out of soundcloud.com's web bundles. */
 async function scrapeClientId(): Promise<string | null> {
-  try {
-    const html = await fetchText('https://soundcloud.com/', 'html');
-    const scriptUrls = Array.from(
-      new Set(html.match(/https:\/\/a-v2\.sndcdn\.com\/assets\/[^"'\s]+\.js/g) ?? []),
-    );
-    // The id tends to hide in the last bundles
-    for (const url of scriptUrls.reverse().slice(0, 12)) {
+  const HOMEPAGES = ['https://soundcloud.com/', 'https://m.soundcloud.com/'];
+  for (const home of HOMEPAGES) {
+    let html: string;
+    try {
+      html = await fetchText(home, 'html');
+    } catch {
+      continue; // that entry page is unreachable through every route — try the next
+    }
+    // 1) The id sometimes sits inline in the HTML bootstrap itself
+    const inline =
+      html.match(/client_id["']?\s*[:=]\s*["']([0-9a-zA-Z]{32})["']/) ||
+      html.match(/["']clientId["']\s*[:=]\s*["']([0-9a-zA-Z]{32})["']/);
+    if (inline) return inline[1];
+
+    // 2) Collect every plausible JS bundle: absolute sndcdn URLs + root-relative assets
+    const found = new Set<string>();
+    for (const m of html.matchAll(/https:\/\/[a-z0-9.-]*sndcdn\.com\/[^"'\s]+\.js[^"'\s]*/gi)) {
+      found.add(m[0]);
+    }
+    for (const m of html.matchAll(/(?:src|href)=["'](\/[A-Za-z0-9._-]*assets\/[^"'\s]+\.js[^"'\s]*)["']/gi)) {
+      found.add('https://soundcloud.com' + m[1]);
+    }
+    const bundles = Array.from(found);
+    bundles.sort((a, b) => a.length - b.length); // keep large/core bundles last
+    // The id hides in one of the last bundles — scan the tail first
+    for (const url of bundles.reverse().slice(0, 24)) {
       try {
         const js = await fetchText(url, 'js');
         const m =
-          js.match(/client_id:"([0-9a-zA-Z]{32})"/) ||
-          js.match(/client_id["']?\s*[:=]\s*["']([0-9a-zA-Z]{32})["']/);
+          js.match(/client_id:["']?([0-9a-zA-Z]{32})["']/) ||
+          js.match(/client_id["']?\s*[:=]\s*["']([0-9a-zA-Z]{32})["']/) ||
+          js.match(/["']clientId["']\s*[:=]\s*["']([0-9a-zA-Z]{32})["']/);
         if (m) return m[1];
       } catch {
         /* try next bundle */
       }
     }
-  } catch {
-    /* soundcloud.com blocked everywhere we looked — fall through */
   }
   return null;
 }
 
+/** Cheap probe: does SoundCloud accept this id? Uses the route chain. */
+export async function verifyClientId(id: string): Promise<boolean> {
+  try {
+    const url = `${API_ORIGIN}/resolve?url=${encodeURIComponent('https://soundcloud.com/soundcloud')}&client_id=${encodeURIComponent(id)}`;
+    const { status, body } = await routedFetch(url, 'json', 8000);
+    if (status !== 200) return false;
+    try {
+      JSON.parse(body);
+      return true;
+    } catch {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resolve a usable client_id. Throws ClientIdUnavailableError when everything fails.
- * Pass excludeId to force a fresh detection after a 401 on a previously working id.
+ * Every candidate — detected or remembered — is verified against the API before
+ * being used, so a stale id can never leak into real requests. Verification
+ * costs one cheap call per detection (results are cached for 24h).
  */
 export async function detectClientId(opts: { forceRefresh?: boolean; excludeId?: string } = {}): Promise<string> {
   const custom = getCustomClientId();
@@ -311,31 +348,41 @@ export async function detectClientId(opts: { forceRefresh?: boolean; excludeId?:
     return custom;
   }
 
+  const tryIds = async (ids: (string | null)[], source: ClientIdSource): Promise<string | null> => {
+    for (const id of ids) {
+      if (!id || id === opts.excludeId) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await verifyClientId(id);
+      if (ok) {
+        resolvedClientId = id;
+        resolvedSource = source;
+        writeJSON(cacheKey, { id, at: Date.now() } satisfies ClientIdCache);
+        return id;
+      }
+    }
+    return null;
+  };
+
   if (!opts.forceRefresh && !opts.excludeId) {
     if (resolvedClientId) return resolvedClientId;
     const cached = readJSON<ClientIdCache | null>(cacheKey, null);
     if (cached && Date.now() - cached.at < TOKEN_TTL_MS && cached.id) {
-      resolvedClientId = cached.id;
-      resolvedSource = 'cache';
-      return cached.id;
+      const ok = await verifyClientId(cached.id);
+      if (ok) {
+        resolvedClientId = cached.id;
+        resolvedSource = 'cache';
+        return cached.id;
+      }
+      removeKey(cacheKey);
     }
   }
 
   const scraped = await scrapeClientId();
-  if (scraped && scraped !== opts.excludeId) {
-    resolvedClientId = scraped;
-    resolvedSource = 'scrape';
-    writeJSON(cacheKey, { id: scraped, at: Date.now() } satisfies ClientIdCache);
-    return scraped;
-  }
+  const fromScrape = await tryIds([scraped], 'scrape');
+  if (fromScrape) return fromScrape;
 
-  for (const id of FALLBACK_CLIENT_IDS) {
-    if (id !== opts.excludeId) {
-      resolvedClientId = id;
-      resolvedSource = 'fallback';
-      return id;
-    }
-  }
+  const fromFallback = await tryIds(FALLBACK_CLIENT_IDS, 'fallback');
+  if (fromFallback) return fromFallback;
 
   throw new ClientIdUnavailableError();
 }
@@ -360,11 +407,14 @@ async function apiFetch<T>(path: string, params: Record<string, string>, retry =
     try {
       await detectClientId({ forceRefresh: true, excludeId: stale ?? undefined });
     } catch {
-      throw new ApiError(status, 'SoundCloud rejected the client_id. Open Settings and paste a fresh one.');
+      throw new ApiError(status, 'SoundCloud rejected the client_id. Open Settings → SoundCloud connection and paste a fresh one (soundcloud.com → DevTools → Network → any api-v2 request → copy the client_id parameter).');
     }
     return apiFetch<T>(path, params, false);
   }
 
+  if (status === 401 || status === 403) {
+    throw new ApiError(status, 'SoundCloud rejected the client_id. Open Settings → SoundCloud connection and paste a fresh one (soundcloud.com → DevTools → Network → any api-v2 request → copy the client_id parameter).');
+  }
   if (status === 404) throw new ApiError(404, 'Not found on SoundCloud.');
   if (status === 429) throw new ApiError(429, 'Rate limited by SoundCloud — wait a moment and retry.');
 
