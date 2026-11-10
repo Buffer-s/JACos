@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { getLocalPlaylists, createLocalPlaylist, addTrackToLocalPlaylist, onLocalLibraryChange, type LocalPlaylist } from '../lib/localLibrary';
+import { useEffect, useState } from 'react';
+import { getLocalPlaylists, addTrackToLocalPlaylist, onLocalLibraryChange, type LocalPlaylist } from '../lib/localLibrary';
 import { toast } from '../lib/toast';
 import { artwork } from '../lib/soundcloud';
 import type { SCTrack } from '../lib/soundcloud';
+import CreatePlaylistModal from './CreatePlaylistModal';
 
 /**
  * "Add to playlist" button used on every track row and in the player bar.
@@ -20,8 +21,7 @@ export default function AddToPlaylistButton({
 }) {
   const [open, setOpen] = useState(false);
   const [playlists, setPlaylists] = useState<LocalPlaylist[]>([]);
-  const [name, setName] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -32,7 +32,6 @@ export default function AddToPlaylistButton({
       if (e.key === 'Escape') setOpen(false);
     };
     window.addEventListener('keydown', onKey);
-    window.setTimeout(() => inputRef.current?.focus(), 30);
     return () => {
       unsub();
       window.removeEventListener('keydown', onKey);
@@ -48,17 +47,9 @@ export default function AddToPlaylistButton({
     setOpen(false);
   };
 
-  const createAndAdd = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const playlist = createLocalPlaylist(trimmed);
-    if (!playlist) {
-      toast('Could not create the playlist (limit reached or storage full).');
-      return;
-    }
+  const createdAndAdd = (playlist: LocalPlaylist) => {
     addTrackToLocalPlaylist(playlist.id, track);
     toast(`Created “${playlist.name}” and added the track.`);
-    setName('');
     setOpen(false);
   };
 
@@ -88,25 +79,12 @@ export default function AddToPlaylistButton({
             </div>
             <div className="modal-body">
               <p className="modal-help" style={{ marginTop: 0 }}>
-                Local playlists stay in this browser only — they are never uploaded.
+                Pick an existing playlist or make a new one — private stays on this device, public shares a link.
               </p>
 
               <div className="field-row" style={{ marginBottom: 12 }}>
-                <input
-                  ref={inputRef}
-                  className="text-input"
-                  placeholder="Create a new playlist…"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') createAndAdd();
-                  }}
-                  maxLength={80}
-                  spellCheck={false}
-                  aria-label="New playlist name"
-                />
-                <button className="btn btn-orange-solid btn-sm" onClick={createAndAdd} disabled={!name.trim()}>
-                  Create
+                <button className="btn btn-outline btn-block" onClick={() => setCreateOpen(true)}>
+                  + New playlist (private or public)…
                 </button>
               </div>
 
@@ -137,6 +115,7 @@ export default function AddToPlaylistButton({
           </div>
         </div>
       )}
+      <CreatePlaylistModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={createdAndAdd} />
     </>
   );
 }

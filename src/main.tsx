@@ -18,8 +18,17 @@ if (bootPath !== '/' && window.location.hash === '') {
   const last = segs[segs.length - 1] ?? '';
   const looksLikeFile = /\.[A-Za-z0-9]{1,8}$/.test(last);
   const isAssetDir = segs[0] === 'assets' || segs[0] === 'static';
+  // the app owns these first segments — never treat them as public-playlist slugs
+  const RESERVED = new Set(['user', 'playlist', 'resolve', 'search', 'likes', 'playlists', 'public', 'api', 'assets', 'static', 'settings']);
+  const single = segs.length === 1 && !RESERVED.has(segs[0].toLowerCase());
   if (!looksLikeFile && !isAssetDir) {
-    window.location.replace(`/#/resolve/${segs.map(encodeURIComponent).join('/')}`);
+    if (single) {
+      // could be a public playlist link (jac-os.pages.dev/<slug>); the page itself
+      // falls back to the SoundCloud resolver when no public playlist exists
+      window.location.replace(`/#/public/${encodeURIComponent(segs[0])}`);
+    } else {
+      window.location.replace(`/#/resolve/${segs.map(encodeURIComponent).join('/')}`);
+    }
   }
 }
 

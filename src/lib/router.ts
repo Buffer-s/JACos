@@ -9,6 +9,7 @@ export type Route =
   | { name: 'likes' }
   | { name: 'playlists' }
   | { name: 'localplaylist'; id: string }
+  | { name: 'publicplaylist'; slug: string }
   | { name: 'notfound' };
 
 export function parseHash(hash: string): Route {
@@ -22,6 +23,7 @@ export function parseHash(hash: string): Route {
   if (segs[0] === 'likes') return { name: 'likes' };
   if (segs[0] === 'playlists' && segs.length === 1) return { name: 'playlists' };
   if (segs[0] === 'playlists' && segs[1]) return { name: 'localplaylist', id: decodeURIComponent(segs[1]) };
+  if (segs[0] === 'public' && segs[1]) return { name: 'publicplaylist', slug: decodeURIComponent(segs[1]).toLowerCase() };
   return { name: 'notfound' };
 }
 

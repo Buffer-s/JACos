@@ -7,6 +7,7 @@
 
 import { readJSON, readString, removeKey, writeJSONStrict } from './storage';
 import { getTracksByIds, type SCTrack } from './soundcloud';
+import { updatePublicPlaylist, deletePublicPlaylist } from './publicPlaylists';
 
 const PLAYLISTS_KEY = 'local_playlists';
 const LIKES_KEY = 'liked_tracks';
@@ -21,6 +22,11 @@ export interface LocalPlaylist {
   createdAt: number;
   updatedAt: number;
   tracks: SCTrack[];
+  /** 'public' playlists keep a snapshot on JACo's servers at jac-os.pages.dev/<slug> */
+  visibility?: 'private' | 'public';
+  slug?: string;
+  editorKey?: string;
+  publishedAt?: number;
 }
 
 /** Notify the UI (sidebar etc.) that the local library changed. */
@@ -63,7 +69,10 @@ export function getLocalPlaylist(id: string): LocalPlaylist | null {
   return getLocalPlaylists().find((p) => p.id === id) ?? null;
 }
 
-export function createLocalPlaylist(name: string): LocalPlaylist | null {
+export function createLocalPlaylist(
+  name: string,
+  opts: { tracks?: SCTrack[]; visibility?: 'private' | 'public'; slug?: string; editorKey?: string } = {},
+): LocalPlaylist | null {
   const trimmed = name.trim();
   if (!trimmed) return null;
   const list = getLocalPlaylists();
@@ -74,10 +83,71 @@ export function createLocalPlaylist(name: string): LocalPlaylist | null {
     name: trimmed,
     createdAt: now,
     updatedAt: now,
-    tracks: [],
+    tracks: opts.tracks ? [...opts.tracks] : [],
+    visibility: opts.visibility ?? 'private',
+    ...(opts.slug ? { slug: opts.slug, publishedAt: now } : {}),
+    ...(opts.editorKey ? { editorKey: opts.editorKey } : {}),
   };
   if (!savePlaylists([playlist, ...list])) return null;
   return playlist;
+}
+
+/** Copies a playlist (yours or someone else's) into a private local copy. */
+export function forkLocalPlaylist(name: string, tracks: SCTrack[]): LocalPlaylist | null {
+  const trimmed = name.trim() || 'Fork';
+  return createLocalPlaylist(`Fork of ${trimmed}`.slice(0, 80), { tracks: tracks.map((t) => t) });
+}
+
+/* ------- public-link sync (snapshot follows local edits; debounced) ------- */
+
+const syncTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function schedulePublicSync(p: LocalPlaylist): void {
+  if (p.visibility !== 'public' || !p.slug || !p.editorKey) return;
+  const slug = p.slug;
+  const key = p.editorKey;
+  const name = p.name;
+  const tracks = p.tracks;
+  const existing = syncTimers.get(slug);
+  if (existing) clearTimeout(existing);
+  syncTimers.set(
+    slug,
+    setTimeout(() => {
+      syncTimers.delete(slug);
+      void updatePublicPlaylist(slug, key, name, tracks).catch(() => {
+        /* silent — the link keeps its last snapshot */
+      });
+    }, 1200),
+  );
+}
+
+/** Publish this local playlist under a slug (called after the remote row exists). */
+export function markPlaylistPublic(id: string, slug: string, editorKey: string): boolean {
+  const list = getLocalPlaylists();
+  const target = list.find((p) => p.id === id);
+  if (!target) return false;
+  target.visibility = 'public';
+  target.slug = slug;
+  target.editorKey = editorKey;
+  target.publishedAt = Date.now();
+  target.updatedAt = Date.now();
+  return savePlaylists(list);
+}
+
+/** Remove the public link (remote delete) — local copy stays. */
+export async function markPlaylistPrivate(id: string): Promise<boolean> {
+  const list = getLocalPlaylists();
+  const target = list.find((p) => p.id === id);
+  if (!target) return false;
+  if (target.slug && target.editorKey) {
+    await deletePublicPlaylist(target.slug, target.editorKey).catch(() => false);
+  }
+  target.visibility = 'private';
+  delete target.slug;
+  delete target.editorKey;
+  delete target.publishedAt;
+  target.updatedAt = Date.now();
+  return savePlaylists(list);
 }
 
 export function renameLocalPlaylist(id: string, name: string): boolean {
@@ -88,10 +158,18 @@ export function renameLocalPlaylist(id: string, name: string): boolean {
   if (!target) return false;
   target.name = trimmed;
   target.updatedAt = Date.now();
-  return savePlaylists(list);
+  const ok = savePlaylists(list);
+  if (ok) schedulePublicSync(target);
+  return ok;
 }
 
 export function deleteLocalPlaylist(id: string): void {
+  const target = getLocalPlaylist(id);
+  if (target?.slug && target.editorKey) {
+    void deletePublicPlaylist(target.slug, target.editorKey).catch(() => {
+      /* remote delete is best-effort */
+    });
+  }
   savePlaylists(getLocalPlaylists().filter((p) => p.id !== id));
 }
 
@@ -104,7 +182,9 @@ export function addTrackToLocalPlaylist(id: string, track: SCTrack): 'added' | '
   if (target.tracks.length >= MAX_TRACKS_PER_PLAYLIST) return 'full';
   target.tracks = [...target.tracks, track];
   target.updatedAt = Date.now();
-  return savePlaylists(list) ? 'added' : 'full';
+  const ok = savePlaylists(list);
+  if (ok) schedulePublicSync(target);
+  return ok ? 'added' : 'full';
 }
 
 export function removeTrackFromLocalPlaylist(id: string, trackId: number): boolean {
@@ -113,7 +193,9 @@ export function removeTrackFromLocalPlaylist(id: string, trackId: number): boole
   if (!target) return false;
   target.tracks = target.tracks.filter((t) => t.id !== trackId);
   target.updatedAt = Date.now();
-  return savePlaylists(list);
+  const ok = savePlaylists(list);
+  if (ok) schedulePublicSync(target);
+  return ok;
 }
 
 export function localPlaylistDuration(p: LocalPlaylist): number {
@@ -176,4 +258,14 @@ export async function migrateLegacyLikes(): Promise<void> {
 export function legacyLikesPending(): boolean {
   const raw = readString(LEGACY_LIKES_KEY);
   return !!raw;
+}
+
+/** Stable numeric id for a local/public playlist string id (PlayerSource wants numbers). */
+export function hashPlaylistId(id: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) % 1_000_000_000;
 }

@@ -120,6 +120,8 @@ function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<
   const hit = cache.get(key);
   if (hit && hit.expires > Date.now()) return Promise.resolve(hit.value as T);
   return load().then((value) => {
+    // never pin a null result (one transient failure must not poison the track)
+    if (value === null || value === undefined) return value;
     if (cache.size >= MAX_CACHE) {
       const oldest = cache.keys().next().value;
       if (oldest !== undefined) cache.delete(oldest);
@@ -618,8 +620,7 @@ export async function getStreamUrl(track: SCTrack): Promise<StreamInfo | null> {
     const ranked = transcodings
       .map((t) => ({ t, r: rankTranscoding(t) }))
       .filter(({ r }) => r < 50)
-      .sort((a, b) => a.r - b.r)
-      .slice(0, 3);
+      .sort((a, b) => a.r - b.r);
     for (const { t } of ranked) {
       try {
         const res = await apiFetch<{ url?: string }>(

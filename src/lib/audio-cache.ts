@@ -109,10 +109,13 @@ export async function ensurePlayable(trackId: number, directUrl: string): Promis
     /* fall through to network */
   }
 
-  // 2) fetch + store
+  // 2) fetch + store — try the CDN directly first, then same-origin proxy
   try {
-    const res = await fetch(directUrl, { mode: 'cors' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    let res = await fetch(directUrl, { mode: 'cors' }).catch(() => null);
+    if (!res || !res.ok) {
+      res = await fetch(`/api/media?u=${encodeURIComponent(directUrl)}`).catch(() => null);
+    }
+    if (!res || !res.ok) throw new Error(res ? `HTTP ${res.status}` : 'fetch failed');
     const blob = await res.blob();
     const stored = new Response(blob, {
       headers: {

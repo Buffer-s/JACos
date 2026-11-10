@@ -763,3 +763,72 @@ body.has-player .footer { margin-bottom: 64px; }
 
 .download-ext { display: inline-flex; align-items: center; padding: 0 10px; color: var(--text-faint); font-size: 13px; }
 .download-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+
+/* ============================================================
+   Public playlists, offline downloads, segmented controls (v0.1.2)
+   SoundCloud design language: orange accent, flat panels, tight type.
+   ============================================================ */
+
+.public-chip {
+  display: inline-flex; align-items: center; font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.09em; color: #fff;
+  background: var(--orange); border-radius: 999px; padding: 2px 9px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card-public-chip { margin-top: 4px; }
+.slug-line { font-family: var(--mono); font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
+
+/* segmented control (private / public, etc.) */
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  border-radius: var(--radius); padding: 9px 12px; cursor: pointer; text-align: left;
+  font-size: 13px; font-weight: 700; transition: border-color .12s, background-color .12s;
+}
+.seg-btn:hover { border-color: var(--orange); }
+.seg-btn.is-on { border-color: var(--orange); background: var(--orange-tint); box-shadow: inset 0 0 0 1px var(--orange); }
+.seg-sub { font-size: 10.5px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; text-transform: none; }
+
+/* slug field */
+.slug-field { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color .12s; }
+.slug-field:focus-within { border-color: var(--orange); }
+.slug-prefix {
+  display: inline-flex; align-items: center; padding: 0 10px; background: var(--panel-grey);
+  color: var(--text-secondary); font-size: 12.5px; border-right: 1px solid var(--border);
+  white-space: nowrap; user-select: none;
+}
+.slug-input { border: 0 !important; border-radius: 0 !important; }
+.slug-input:focus { box-shadow: none; }
+.slug-status { font-size: 12px; margin-top: 7px; min-height: 17px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.slug-available { color: var(--orange); font-weight: 700; }
+.slug-taken, .slug-invalid, .slug-error { color: #d93636; font-weight: 600; }
+.slug-checking { color: var(--text-secondary); }
+.slug-preview { font-family: var(--mono); font-size: 11.5px; }
+
+/* offline for playlist */
+.offline-cluster { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.offline-badge {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800;
+  color: var(--orange); background: var(--orange-tint); border-radius: 999px; padding: 3px 10px;
+}
+
+/* shared focus ring (accessibility) */
+:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; border-radius: 2px; }
+
+@media (max-width: 640px) {
+  /* full-screen sheet modals on phones */
+  .modal-overlay { padding: 0; align-items: stretch; }
+  .modal, .modal-sm { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .modal-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  /* stop iOS focus-zoom on inputs */
+  .text-input, .slug-input, textarea, select { font-size: 16px; }
+  /* comfortable touch targets */
+  .btn, .icon-btn, .track-action, .pb-icon, .pb-play { min-width: 44px; min-height: 44px; }
+  .track-action { justify-content: center; }
+  .playlist-cta .btn, .playlist-cta .offline-cluster, .playlist-cta .offline-cluster button { width: 100%; justify-content: center; }
+  .likes-actions { flex-wrap: wrap; }
+  .offline-cluster { justify-content: center; }
+  .player-bar { padding-bottom: env(safe-area-inset-bottom); }
+  .slug-line { max-width: 220px; }
+}

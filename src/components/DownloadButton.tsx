@@ -2,6 +2,23 @@ import { useEffect, useRef, useState } from 'react';
 import { getProgressiveStreamUrl, type SCTrack } from '../lib/soundcloud';
 import { toast } from '../lib/toast';
 
+/** Whether the /api/media edge proxy exists (vs a static host without Functions). Cached per session. */
+let mediaProbe: Promise<boolean> | null = null;
+function mediaFunctionAvailable(): Promise<boolean> {
+  if (!mediaProbe) {
+    mediaProbe = fetch('/api/media', { method: 'GET' })
+      .then(async (res) => {
+        // our function answers 400 (missing u); a static host answers 404/HTML
+        if (res.status === 400) return true;
+        const ct = res.headers.get('content-type') ?? '';
+        if (res.ok && ct.includes('application/json')) return true;
+        return false;
+      })
+      .catch(() => false);
+  }
+  return mediaProbe;
+}
+
 /** Characters not allowed in filenames on any OS, plus control characters. */
 function sanitizeFilename(name: string): string {
   const clean = name
@@ -52,7 +69,21 @@ export default function DownloadButton({
         toast('This track is HLS-only — SoundCloud serves no direct MP3 to save.');
         return;
       }
-      const res = await fetch(streamUrl);
+      if (await mediaFunctionAvailable()) {
+        // same-origin edge proxy → Content-Disposition: attachment. No CORS involved.
+        const href = `/api/media?u=${encodeURIComponent(streamUrl)}&download=1&name=${encodeURIComponent(filename)}`;
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = `${filename}.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        toast(`Downloading “${filename}.mp3”…`);
+        setOpen(false);
+        return;
+      }
+      // static hosting without Functions — try a plain fetch (works only if the CDN allows it)
+      const res = await fetch(streamUrl, { mode: 'cors' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -67,7 +98,10 @@ export default function DownloadButton({
       setOpen(false);
     } catch (err) {
       console.warn('download failed', err);
-      toast('SoundCloud’s CDN refused the download. Open the track on soundcloud.com instead.');
+      toast('The download failed. Open the track on SoundCloud instead.', {
+        actionLabel: 'Open on SoundCloud',
+        onAction: () => window.open(track.permalink_url ?? 'https://soundcloud.com', '_blank', 'noopener'),
+      });
     } finally {
       setBusy(false);
     }
@@ -99,7 +133,8 @@ export default function DownloadButton({
             </div>
             <div className="modal-body">
               <p className="modal-help" style={{ marginTop: 0 }}>
-                The MP3 is saved directly from SoundCloud&rsquo;s CDN to your device — JACos never hosts or proxies it.
+                The MP3 is streamed straight from SoundCloud&rsquo;s CDN to your device (through JACo&rsquo;s edge only for the
+                save itself — nothing is stored server-side). HLS-only tracks can&rsquo;t be saved as MP3s.
               </p>
               <label className="field-label" htmlFor="download-name">File name</label>
               <div className="field-row">
