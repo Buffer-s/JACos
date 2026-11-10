@@ -2,7 +2,7 @@
 
 **Just Another Copy of Sweden's Soundcloud** — paste a public SoundCloud profile or playlist URL and stream what they publish, straight from SoundCloud's own CDN.
 
-[![version](https://img.shields.io/badge/version-0.0.8-ff5500.svg)](package.json)
+[![version](https://img.shields.io/badge/version-0.0.9-ff5500.svg)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-ff5500.svg)](LICENSE)
 
 Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all audio belongs to its uploaders.
