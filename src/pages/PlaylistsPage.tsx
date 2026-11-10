@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getLocalPlaylists, createLocalPlaylist, deleteLocalPlaylist, localPlaylistDuration, onLocalLibraryChange } from '../lib/localLibrary';
+import { getLocalPlaylists, deleteLocalPlaylist, localPlaylistDuration, onLocalLibraryChange } from '../lib/localLibrary';
+import CreatePlaylistModal from '../components/CreatePlaylistModal';
 import { fmtDuration } from '../lib/format';
 import { navigate } from '../lib/router';
 import Artwork from '../components/Artwork';
@@ -8,23 +9,11 @@ import { toast } from '../lib/toast';
 
 export default function PlaylistsPage() {
   const [tick, setTick] = useState(0);
-  const [name, setName] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => onLocalLibraryChange(() => setTick((t) => t + 1)), []);
 
   const playlists = useMemo(() => getLocalPlaylists(), [tick]);
-
-  const create = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const pl = createLocalPlaylist(trimmed);
-    if (!pl) {
-      toast('Could not create the playlist (limit reached or storage full).');
-      return;
-    }
-    setName('');
-    navigate(`/playlists/${encodeURIComponent(pl.id)}`);
-  };
 
   const remove = (id: string, playlistName: string) => {
     deleteLocalPlaylist(id);
@@ -38,22 +27,11 @@ export default function PlaylistsPage() {
           <svg viewBox="0 0 48 48" width="34" height="34" fill="#fff"><path d="M13 8h22v5H13zM13 14h22v5H13zM13 20h14v5H13zM13 26h14v5H13zM32 22h4v14.2a5.5 5.5 0 1 1-4-5.3V22Z"/></svg>
         </div>
         <div className="likes-meta">
-          <p className="likes-eyebrow">Local · stored in this browser</p>
+          <p className="likes-eyebrow">Local by default</p>
           <h1>Your playlists</h1>
-          <p className="likes-sub">{playlists.length} playlist{playlists.length === 1 ? '' : 's'} — nothing here is uploaded or synced.</p>
+          <p className="likes-sub">{playlists.length} playlist{playlists.length === 1 ? '' : 's'} — private ones stay on this device; public ones share a link.</p>
           <div className="likes-actions">
-            <input
-              className="text-input"
-              placeholder="Name a new playlist…"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && create()}
-              maxLength={80}
-              spellCheck={false}
-              aria-label="New playlist name"
-              style={{ minWidth: 220 }}
-            />
-            <button className="btn btn-orange-solid btn-sm" onClick={create} disabled={!name.trim()}>Create playlist</button>
+            <button className="btn btn-orange-solid btn-sm" onClick={() => setCreateOpen(true)}>Create playlist</button>
           </div>
         </div>
       </header>
@@ -82,6 +60,7 @@ export default function PlaylistsPage() {
                   <span className="card-tracks-pill">{p.tracks.length} track{p.tracks.length === 1 ? '' : 's'}</span>
                 </div>
                 <a className="card-title" href={`#/playlists/${encodeURIComponent(p.id)}`} title={p.name}>{p.name}</a>
+                {p.visibility === 'public' && p.slug && <span className="public-chip card-public-chip" title={`https://jac-os.pages.dev/${p.slug}`}>Public</span>}
                 <div className="card-meta">
                   <span>{fmtDuration(localPlaylistDuration(p))}</span>
                   <button className="linkish card-delete" onClick={() => remove(p.id, p.name)}>Delete</button>
@@ -91,6 +70,7 @@ export default function PlaylistsPage() {
           })}
         </div>
       )}
+      <CreatePlaylistModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={(pl) => navigate(`/playlists/${encodeURIComponent(pl.id)}`)} />
     </div>
   );
 }

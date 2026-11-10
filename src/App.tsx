@@ -16,6 +16,7 @@ import SearchPage from './pages/SearchPage';
 import LikesPage from './pages/LikesPage';
 import PlaylistsPage from './pages/PlaylistsPage';
 import LocalPlaylistPage from './pages/LocalPlaylistPage';
+import PublicPlaylistPage from './pages/PublicPlaylistPage';
 import Sidebar from './components/Sidebar';
 import { migrateLegacyLikes } from './lib/localLibrary';
 
@@ -38,6 +39,8 @@ function Routed() {
       return <PlaylistsPage />;
     case 'localplaylist':
       return <LocalPlaylistPage key={route.id} id={route.id} />;
+    case 'publicplaylist':
+      return <PublicPlaylistPage key={route.slug} slug={route.slug} />;
     default:
       return <NotFound />;
   }

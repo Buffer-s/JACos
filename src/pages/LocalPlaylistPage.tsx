@@ -6,6 +6,8 @@ import {
   removeTrackFromLocalPlaylist,
   localPlaylistDuration,
   onLocalLibraryChange,
+  hashPlaylistId,
+  markPlaylistPrivate,
 } from '../lib/localLibrary';
 import { artwork } from '../lib/soundcloud';
 import { fmtCount, fmtTotalDuration } from '../lib/format';
@@ -14,6 +16,9 @@ import { navigate } from '../lib/router';
 import TrackRow from '../components/TrackRow';
 import Artwork from '../components/Artwork';
 import NotFound from './NotFound';
+import ForkButton from '../components/ForkButton';
+import OfflineButton from '../components/OfflineButton';
+import CreatePlaylistModal from '../components/CreatePlaylistModal';
 import { toast } from '../lib/toast';
 
 export default function LocalPlaylistPage({ id }: { id: string }) {
@@ -22,6 +27,8 @@ export default function LocalPlaylistPage({ id }: { id: string }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [makingPrivate, setMakingPrivate] = useState(false);
 
   useEffect(() => onLocalLibraryChange(() => setTick((t) => t + 1)), []);
 
@@ -34,12 +41,12 @@ export default function LocalPlaylistPage({ id }: { id: string }) {
   const playlist = useMemo(() => getLocalPlaylist(id), [id, tick]);
 
   const total = playlist ? localPlaylistDuration(playlist) : 0;
-  const isThisList = !!playlist && source?.type === 'local' && source.id === hashId(playlist.id);
+  const isThisList = !!playlist && source?.type === 'local' && source.id === hashPlaylistId(playlist.id);
   const isPlaying = isThisList && status === 'playing';
   const isLoading = isThisList && status === 'loading';
 
   const sourceInfo = useMemo(
-    () => (playlist ? { type: 'local' as const, id: hashId(playlist.id), title: playlist.name } : { type: 'local' as const }),
+    () => (playlist ? { type: 'local' as const, id: hashPlaylistId(playlist.id), title: playlist.name } : { type: 'local' as const }),
     [playlist],
   );
 
@@ -127,7 +134,11 @@ export default function LocalPlaylistPage({ id }: { id: string }) {
         )}
 
         <div className="playlist-stats">
-          <span className="local-chip">Local playlist</span>
+          {playlist.visibility === 'public' && playlist.slug ? (
+            <span className="public-chip" title={`https://jac-os.pages.dev/${playlist.slug}`}>Public · jac-os.pages.dev/{playlist.slug}</span>
+          ) : (
+            <span className="local-chip">Local playlist · private</span>
+          )}
           <span className="dot-sep" aria-hidden="true" />
           <span>{playlist.tracks.length} track{playlist.tracks.length === 1 ? '' : 's'}</span>
           <span className="dot-sep" aria-hidden="true" />
@@ -141,8 +152,28 @@ export default function LocalPlaylistPage({ id }: { id: string }) {
           <button className="btn btn-outline btn-block" onClick={shuffleAll} disabled={playlist.tracks.length === 0}>
             Shuffle play
           </button>
+          <ForkButton name={playlist.name} tracks={playlist.tracks} />
+          <OfflineButton tracks={playlist.tracks} label="Download for offline" />
         </div>
         <div className="playlist-links">
+          {playlist.visibility === 'public' && playlist.slug ? (
+            <>
+              <button className="linkish" onClick={() => { void navigator.clipboard?.writeText(`https://jac-os.pages.dev/${playlist.slug}`); toast('Public link copied.'); }}>
+                Copy public link
+              </button>
+              <button className="linkish" onClick={() => {
+                setMakingPrivate(true);
+                void markPlaylistPrivate(playlist.id).then(() => {
+                  setMakingPrivate(false);
+                  toast('Playlist is private again — the link no longer works.');
+                });
+              }} disabled={makingPrivate}>
+                {makingPrivate ? 'Making private…' : 'Make private'}
+              </button>
+            </>
+          ) : (
+            <button className="linkish" onClick={() => setPublishOpen(true)}>Make public…</button>
+          )}
           <button className={`linkish${confirmingDelete ? ' danger-linkish' : ''}`} onClick={remove}>
             {confirmingDelete ? 'Really delete this playlist?' : 'Delete playlist'}
           </button>
@@ -179,18 +210,15 @@ export default function LocalPlaylistPage({ id }: { id: string }) {
             <p>Press the add button (＋) on any track anywhere in JACos to put it here.</p>
           </div>
         )}
-        <p className="list-note">Stored only in this browser — nothing is uploaded. Tracks stream from SoundCloud&rsquo;s CDN.</p>
+        {playlist.visibility === 'public' && playlist.slug ? (
+          <p className="list-note">Public at <strong>jac-os.pages.dev/{playlist.slug}</strong> — anyone with the link can listen. Tracks stream from SoundCloud&rsquo;s CDN.</p>
+        ) : (
+          <p className="list-note">Stored only in this browser — nothing is uploaded. Tracks stream from SoundCloud&rsquo;s CDN.</p>
+        )}
       </section>
+      <CreatePlaylistModal open={publishOpen} onClose={() => setPublishOpen(false)} publishOf={playlist} onCreated={() => setTick((t) => t + 1)} />
     </div>
   );
 }
 
-/** Stable numeric id for a local playlist (PlayerSource wants numbers). */
-function hashId(id: string): number {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0) % 1_000_000_000;
-}
+

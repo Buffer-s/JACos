@@ -4,12 +4,11 @@ import {
   getLikedTracks,
   getLocalPlaylists,
   onLocalLibraryChange,
-  createLocalPlaylist,
   localPlaylistDuration,
 } from '../lib/localLibrary';
+import CreatePlaylistModal from './CreatePlaylistModal';
 import { artwork } from '../lib/soundcloud';
 import { fmtDuration } from '../lib/format';
-import { toast } from '../lib/toast';
 import { usePlayer } from '../state/PlayerContext';
 
 /**
@@ -20,7 +19,7 @@ export default function Sidebar() {
   const route = useHashRoute();
   const { playQueue } = usePlayer();
   const [tick, setTick] = useState(0);
-  const [name, setName] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
     const unsub = onLocalLibraryChange(() => setTick((t) => t + 1));
@@ -38,19 +37,6 @@ export default function Sidebar() {
   const liked = useMemo(() => getLikedTracks(), [tick, route]);
   const playlists = useMemo(() => getLocalPlaylists(), [tick, route]);
   const recentLikes = liked.slice(0, 4);
-
-  const create = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const pl = createLocalPlaylist(trimmed);
-    if (!pl) {
-      toast('Could not create the playlist (limit reached or storage full).');
-      return;
-    }
-    toast(`Created “${pl.name}”.`);
-    setName('');
-    navigate(`/playlists/${encodeURIComponent(pl.id)}`);
-  };
 
   return (
     <aside className="sidebar" aria-label="Your library">
@@ -112,21 +98,12 @@ export default function Sidebar() {
           </ul>
         )}
         <div className="sidebar-create">
-          <input
-            className="text-input"
-            placeholder="New playlist…"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && create()}
-            maxLength={80}
-            spellCheck={false}
-            aria-label="New playlist name"
-          />
-          <button className="btn btn-orange-solid btn-sm" onClick={create} disabled={!name.trim()} aria-label="Create playlist">+</button>
+          <button className="btn btn-outline btn-block btn-sm" onClick={() => setCreateOpen(true)}>+ New playlist</button>
         </div>
         <a className="sidebar-link" href="#/playlists">Manage playlists →</a>
-        <p className="sidebar-note">Local playlists are stored only in this browser.</p>
+        <p className="sidebar-note">Private playlists stay on this device; public ones share a link.</p>
       </section>
+      <CreatePlaylistModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={(pl) => navigate(`/playlists/${encodeURIComponent(pl.id)}`)} />
     </aside>
   );
 }

@@ -11,6 +11,7 @@ import {
 import type Hls from 'hls.js';
 import { getStreamUrl, type SCTrack } from '../lib/soundcloud';
 import { ensurePlayable, prefetchTrack } from '../lib/audio-cache';
+import { getOfflineBlobUrl } from '../lib/offline';
 import { toast } from '../lib/toast';
 import { readString, writeString } from '../lib/storage';
 import { getLikedTracks, toggleLikedTrack } from '../lib/localLibrary';
@@ -117,6 +118,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const scSourceUrl = useCallback((t: SCTrack): string => {
+    if (t.permalink_url) return t.permalink_url;
+    const u = t.user?.permalink;
+    const p = t.permalink;
+    return u && p ? `https://soundcloud.com/${u}/${p}` : 'https://soundcloud.com';
+  }, []);
+
+  const reportFailure = useCallback(
+    (track: SCTrack, message: string) => {
+      setStatus('error');
+      setErrorMessage(message);
+      toast(message, {
+        actionLabel: 'Open on SoundCloud',
+        onAction: () => window.open(scSourceUrl(track), '_blank', 'noopener'),
+      });
+    },
+    [scSourceUrl],
+  );
+
   const loadAndPlay = useCallback(
     async (track: SCTrack) => {
       const token = ++loadToken.current;
@@ -131,19 +151,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const stream = await getStreamUrl(track);
         if (token !== loadToken.current) return; // superseded by a newer selection
         if (!stream) {
-          setStatus('error');
-          setErrorMessage('This track has no playable stream (it may be region-locked or disabled by the uploader).');
+          reportFailure(track, 'This track has no playable stream (it may be region-locked or disabled by the uploader).');
           return;
         }
 
         if (stream.kind === 'hls') {
+          const proxiedManifest = `/api/media?u=${encodeURIComponent(stream.url)}`;
           let attached = false;
           try {
             const { default: HlsJs } = await import('hls.js'); // code-split: only loaded for HLS-only tracks
             if (token !== loadToken.current) return;
             if (HlsJs.isSupported()) {
               const hls = new HlsJs({ enableWorker: true, lowLatencyMode: false });
-              hls.loadSource(stream.url);
+              hls.on(HlsJs.Events.ERROR, (_evt, data) => {
+                if (data?.fatal && token === loadToken.current) {
+                  reportFailure(track, 'The stream failed to load (it may be region-locked or blocked for you).');
+                }
+              });
+              // same-origin proxy: the CDN does not send CORS headers for hls.js
+              hls.loadSource(proxiedManifest);
               hls.attachMedia(audio);
               hlsRef.current = hls;
               attached = true;
@@ -151,14 +177,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           } catch {
             /* fall through to native playback */
           }
-          if (!attached) audio.src = stream.url; // Safari: native HLS
+          if (!attached) audio.src = proxiedManifest; // Safari: native HLS via proxy
           if (token !== loadToken.current) return;
           setCacheInfo({ fromCache: false, cacheable: false, streaming: 'hls' });
         } else {
-          const result = await ensurePlayable(track.id, stream.url);
+          const offlineUrl = await getOfflineBlobUrl(track.id);
           if (token !== loadToken.current) return;
-          audio.src = result.url;
-          setCacheInfo({ fromCache: result.fromCache, cacheable: result.cacheable, streaming: 'progressive' });
+          if (offlineUrl) {
+            audio.src = offlineUrl;
+            setCacheInfo({ fromCache: true, cacheable: true, streaming: 'progressive' });
+          } else {
+            const result = await ensurePlayable(track.id, stream.url);
+            if (token !== loadToken.current) return;
+            audio.src = result.url;
+            setCacheInfo({ fromCache: result.fromCache, cacheable: result.cacheable, streaming: 'progressive' });
+          }
         }
 
         try {
@@ -173,7 +206,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setErrorMessage(message);
       }
     },
-    [audio, destroyHls],
+    [audio, destroyHls, reportFailure],
   );
 
   const playQueue = useCallback(
@@ -305,8 +338,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       next();
     };
     const onError = () => {
+      const t = queueRef.current[indexRef.current];
       setStatus('error');
-      setErrorMessage('The stream failed to load. Try again, or check Settings → connection.');
+      const message = 'The stream failed to load. Try again, or check Settings → connection.';
+      setErrorMessage(message);
+      if (t) {
+        toast(message, {
+          actionLabel: 'Open on SoundCloud',
+          onAction: () => window.open(scSourceUrl(t), '_blank', 'noopener'),
+        });
+      }
     };
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
@@ -320,7 +361,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
     };
-  }, [audio, next]);
+  }, [audio, next, scSourceUrl]);
 
   // Prefetch the next track into the cache once playback starts
   useEffect(() => {
