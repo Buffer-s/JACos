@@ -17,7 +17,6 @@ import TrackRow from '../components/TrackRow';
 import Artwork from '../components/Artwork';
 import NotFound from './NotFound';
 import ForkButton from '../components/ForkButton';
-import OfflineButton from '../components/OfflineButton';
 import CreatePlaylistModal from '../components/CreatePlaylistModal';
 import { toast } from '../lib/toast';
 
@@ -153,7 +152,6 @@ export default function LocalPlaylistPage({ id }: { id: string }) {
             Shuffle play
           </button>
           <ForkButton name={playlist.name} tracks={playlist.tracks} />
-          <OfflineButton tracks={playlist.tracks} label="Download for offline" />
         </div>
         <div className="playlist-links">
           {playlist.visibility === 'public' && playlist.slug ? (

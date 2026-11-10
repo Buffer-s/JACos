@@ -10,8 +10,6 @@ import {
 } from 'react';
 import type Hls from 'hls.js';
 import { getStreamUrl, type SCTrack } from '../lib/soundcloud';
-import { ensurePlayable, prefetchTrack } from '../lib/audio-cache';
-import { getOfflineBlobUrl } from '../lib/offline';
 import { toast } from '../lib/toast';
 import { readString, writeString } from '../lib/storage';
 import { getLikedTracks, toggleLikedTrack } from '../lib/localLibrary';
@@ -23,12 +21,6 @@ export interface PlaySource {
   type: 'playlist' | 'tracks' | 'single' | 'local';
   id?: number;
   title?: string;
-}
-
-export interface CacheInfo {
-  fromCache: boolean;
-  cacheable: boolean;
-  streaming: 'progressive' | 'hls';
 }
 
 interface PlayerContextValue {
@@ -44,7 +36,6 @@ interface PlayerContextValue {
   shuffle: boolean;
   repeat: RepeatMode;
   liked: Set<number>;
-  cacheInfo: CacheInfo | null;
   source: PlaySource | null;
   playQueue: (tracks: SCTrack[], startIndex: number, source: PlaySource) => void;
   toggle: () => void;
@@ -90,7 +81,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return r === 'all' || r === 'one' ? r : 'off';
   });
   const [likedArr, setLikedArr] = useState<number[]>(() => getLikedTracks().map((t) => t.id));
-  const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [source, setSource] = useState<PlaySource | null>(null);
 
   const liked = useMemo(() => new Set(likedArr), [likedArr]);
@@ -144,7 +134,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setCurrent(track);
       setStatus('loading');
       setErrorMessage(null);
-      setCacheInfo(null);
       setDuration((track.duration || 0) / 1000);
 
       try {
@@ -156,7 +145,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
 
         if (stream.kind === 'hls') {
-          const proxiedManifest = `/api/media?u=${encodeURIComponent(stream.url)}`;
           let attached = false;
           try {
             const { default: HlsJs } = await import('hls.js'); // code-split: only loaded for HLS-only tracks
@@ -168,8 +156,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
                   reportFailure(track, 'The stream failed to load (it may be region-locked or blocked for you).');
                 }
               });
-              // same-origin proxy: the CDN does not send CORS headers for hls.js
-              hls.loadSource(proxiedManifest);
+              hls.loadSource(stream.url);
               hls.attachMedia(audio);
               hlsRef.current = hls;
               attached = true;
@@ -177,21 +164,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           } catch {
             /* fall through to native playback */
           }
-          if (!attached) audio.src = proxiedManifest; // Safari: native HLS via proxy
+          if (!attached) audio.src = stream.url; // Safari: native HLS
           if (token !== loadToken.current) return;
-          setCacheInfo({ fromCache: false, cacheable: false, streaming: 'hls' });
         } else {
-          const offlineUrl = await getOfflineBlobUrl(track.id);
-          if (token !== loadToken.current) return;
-          if (offlineUrl) {
-            audio.src = offlineUrl;
-            setCacheInfo({ fromCache: true, cacheable: true, streaming: 'progressive' });
-          } else {
-            const result = await ensurePlayable(track.id, stream.url);
-            if (token !== loadToken.current) return;
-            audio.src = result.url;
-            setCacheInfo({ fromCache: result.fromCache, cacheable: result.cacheable, streaming: 'progressive' });
-          }
+          // progressive MP3: <audio> does not need CORS, so play it straight from the CDN
+          audio.src = stream.url;
         }
 
         try {
@@ -363,23 +340,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
   }, [audio, next, scSourceUrl]);
 
-  // Prefetch the next track into the cache once playback starts
-  useEffect(() => {
-    if (status !== 'playing') return;
-    const q = queueRef.current;
-    const n = indexRef.current + 1;
-    const nextTrack = q[n];
-    if (!nextTrack) return;
-    const t = window.setTimeout(() => {
-      void getStreamUrl(nextTrack)
-        .then((s) => {
-          if (s?.kind === 'progressive') void prefetchTrack(nextTrack.id, s.url);
-        })
-        .catch(() => undefined);
-    }, 2500);
-    return () => window.clearTimeout(t);
-  }, [status, index]);
-
   // Media Session API — lock-screen / OS-media-key integration
   useEffect(() => {
     if (!('mediaSession' in navigator) || !current) return;
@@ -451,7 +411,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     shuffle,
     repeat,
     liked,
-    cacheInfo,
     source,
     playQueue,
     toggle,

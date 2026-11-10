@@ -586,30 +586,6 @@ function rankTranscoding(t: SCTranscoding): number {
   return 50; // opus and friends — not universally playable
 }
 
-/**
- * Progressive-only stream resolution, used when saving a track to a file.
- * Returns null when the track has no direct-MP3 transcoding (HLS-only).
- */
-export async function getProgressiveStreamUrl(track: SCTrack): Promise<string | null> {
-  if (!track || typeof track.id !== 'number') return null;
-  const transcodings = track.media?.transcodings ?? [];
-  const candidates = transcodings
-    .filter((t) => t.format?.protocol === 'progressive' && !t.snipped)
-    .sort((a, b) => rankTranscoding(a) - rankTranscoding(b));
-  for (const t of candidates) {
-    try {
-      const res = await apiFetch<{ url?: string }>(
-        t.url,
-        track.track_authorization ? { track_authorization: track.track_authorization } : {},
-      );
-      if (res?.url) return res.url;
-    } catch {
-      /* try the next transcoding */
-    }
-  }
-  return null;
-}
-
 export async function getStreamUrl(track: SCTrack): Promise<StreamInfo | null> {
   if (!track || typeof track.id !== 'number') return null;
   const transcodings = track.media?.transcodings ?? [];

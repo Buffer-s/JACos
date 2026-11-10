@@ -14,22 +14,18 @@ import {
 import { version } from '../../package.json';
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme';
 import { removeKey } from '../lib/storage';
-import { cacheStats, clearAudioCache, onCacheChange, type CacheStats } from '../lib/audio-cache';
 import { toast } from '../lib/toast';
 import GitHubMark from './GitHubMark';
 
 const GITHUB_URL = 'https://github.com/bufferclick/JACos';
 
 export default function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [stats, setStats] = useState<CacheStats | null>(null);
   const [clientId, setClientId] = useState('');
   const [source, setSource] = useState<string | null>(null);
   const [proxy, setProxy] = useState('');
   const [testing, setTesting] = useState(false);
   const [route, setRoute] = useState<string>('Not detected yet');
   const [themePref, setThemePrefState] = useState<ThemePref>(() => getThemePref());
-
-  const refreshStats = () => void cacheStats().then(setStats);
 
   useEffect(() => {
     if (!open) return;
@@ -41,14 +37,9 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     detectClientId()
       .then(() => setSource(getClientIdSource()))
       .catch(() => setSource(getClientIdSource()));
-    refreshStats();
-    const unsub = onCacheChange(refreshStats);
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
-    return () => {
-      unsub();
-      window.removeEventListener('keydown', onKey);
-    };
+    return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   if (!open) return null;
@@ -111,7 +102,6 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
   const sourceLabel =
     source === 'server' ? 'Built-in bridge (no setup needed)' : source === 'custom' ? 'Custom (yours)' : source === 'scrape' ? 'Auto-detected from soundcloud.com' : source === 'cache' ? 'Auto-detected (cached)' : 'Not needed — handled by the bridge';
 
-  const mb = stats ? (stats.bytes / (1024 * 1024)).toFixed(1) : '–';
 
   return (
     <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -178,35 +168,6 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
                 autoComplete="off"
               />
               <button className="btn btn-orange-solid btn-sm" onClick={saveProxy}>Save</button>
-            </div>
-          </section>
-
-          {/* ---- Audio cache ---- */}
-          <section className="modal-section">
-            <h3>Audio cache</h3>
-            <p className="modal-help">
-              Songs stream from SoundCloud&rsquo;s CDN exactly as on the real site. The first play is
-              downloaded once into your browser&rsquo;s <strong>Cache Storage</strong> and replays come straight
-              from cache (capped at 40 tracks / 256&nbsp;MB, oldest evicted first).
-            </p>
-            <p className="modal-help">
-              Two honest caveats: only <strong>progressive MP3</strong> streams are cached — HLS streams are not —
-              and caching only works when SoundCloud&rsquo;s CDN lets this browser read the bytes, which it often
-              doesn&rsquo;t. A permanent <strong>0 MB</strong> just means the CDN refused caching here; playback is
-              unaffected and nothing is ever written to disk.
-            </p>
-            <div className="cache-row">
-              <div className="cache-stat">
-                <span className="cache-num">{stats?.supported === false ? '–' : stats?.entries ?? '…'}</span>
-                <span className="cache-label">tracks cached</span>
-              </div>
-              <div className="cache-stat">
-                <span className="cache-num">{stats ? `${mb} MB` : '…'}</span>
-                <span className="cache-label">cache size</span>
-              </div>
-              <button className="btn btn-outline btn-sm" onClick={() => { void clearAudioCache().then(() => { toast('Audio cache cleared.'); refreshStats(); }); }}>
-                Clear cache
-              </button>
             </div>
           </section>
 

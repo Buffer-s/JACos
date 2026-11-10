@@ -477,7 +477,6 @@ body.has-player .footer { margin-bottom: 64px; }
 .pb-artist-row { display: flex; align-items: center; gap: 10px; margin-top: 2px; min-width: 0; }
 .pb-artist { font-size: 11.5px; color: var(--text-secondary); text-decoration: none; }
 .pb-artist:hover { color: var(--orange); }
-.pb-cache { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-faint); border: 1px solid var(--border); padding: 1.5px 6px; border-radius: 999px; }
 .pb-error { font-size: 11px; color: var(--danger); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .pb-right { display: flex; align-items: center; gap: 8px; }
@@ -519,11 +518,6 @@ body.has-player .footer { margin-bottom: 64px; }
 .text-input { flex: 1; min-width: 0; height: 36px; border: 1px solid var(--border); border-radius: var(--radius); padding: 0 11px; font-size: 13px; transition: border-color .15s; }
 .text-input:focus { outline: none; border-color: var(--orange); }
 .text-input.mono { font-family: var(--mono); font-size: 12px; }
-.cache-row { display: flex; align-items: center; gap: 28px; margin-top: 14px; }
-.cache-stat { display: flex; flex-direction: column; }
-.cache-num { font-size: 21px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.cache-label { font-size: 10.5px; color: var(--text-secondary); margin-top: 1px; }
-.cache-row .btn { margin-left: auto; }
 
 /* ------------------------------------------------------------
    Skeletons
@@ -586,7 +580,6 @@ body.has-player .footer { margin-bottom: 64px; }
   .nav-link { display: none; }
   .user-header { flex-direction: column; gap: 16px; }
   .user-avatar img, .user-avatar-fallback { width: 96px; height: 96px; }
-  .pb-clock, .pb-cache, .volume-slider { display: none; }
   .pb-inner { gap: 10px; }
   .track-plays { display: none; }
   .track-row { grid-template-columns: 26px 42px minmax(0, 1fr) 42px 46px 52px; gap: 8px; padding: 6px 6px; }
@@ -761,11 +754,9 @@ body.has-player .footer { margin-bottom: 64px; }
 }
 
 
-.download-ext { display: inline-flex; align-items: center; padding: 0 10px; color: var(--text-faint); font-size: 13px; }
-.download-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 
 /* ============================================================
-   Public playlists, offline downloads, segmented controls (v0.1.2)
+   Public playlists (v0.1.2)
    SoundCloud design language: orange accent, flat panels, tight type.
    ============================================================ */
 
@@ -777,18 +768,6 @@ body.has-player .footer { margin-bottom: 64px; }
 }
 .card-public-chip { margin-top: 4px; }
 .slug-line { font-family: var(--mono); font-size: 11px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px; }
-
-/* segmented control (private / public, etc.) */
-.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.seg-btn {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  border: 1px solid var(--border); background: var(--bg); color: var(--text);
-  border-radius: var(--radius); padding: 9px 12px; cursor: pointer; text-align: left;
-  font-size: 13px; font-weight: 700; transition: border-color .12s, background-color .12s;
-}
-.seg-btn:hover { border-color: var(--orange); }
-.seg-btn.is-on { border-color: var(--orange); background: var(--orange-tint); box-shadow: inset 0 0 0 1px var(--orange); }
-.seg-sub { font-size: 10.5px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; text-transform: none; }
 
 /* slug field */
 .slug-field { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color .12s; }
@@ -806,13 +785,6 @@ body.has-player .footer { margin-bottom: 64px; }
 .slug-checking { color: var(--text-secondary); }
 .slug-preview { font-family: var(--mono); font-size: 11.5px; }
 
-/* offline for playlist */
-.offline-cluster { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
-.offline-badge {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 800;
-  color: var(--orange); background: var(--orange-tint); border-radius: 999px; padding: 3px 10px;
-}
-
 /* shared focus ring (accessibility) */
 :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; border-radius: 2px; }
 
@@ -826,9 +798,71 @@ body.has-player .footer { margin-bottom: 64px; }
   /* comfortable touch targets */
   .btn, .icon-btn, .track-action, .pb-icon, .pb-play { min-width: 44px; min-height: 44px; }
   .track-action { justify-content: center; }
-  .playlist-cta .btn, .playlist-cta .offline-cluster, .playlist-cta .offline-cluster button { width: 100%; justify-content: center; }
   .likes-actions { flex-wrap: wrap; }
-  .offline-cluster { justify-content: center; }
   .player-bar { padding-bottom: env(safe-area-inset-bottom); }
   .slug-line { max-width: 220px; }
+}
+
+/* ============================================================
+   New playlist modal — SoundCloud style (v0.1.3)
+   ============================================================ */
+.nlp { border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-pop); }
+.nlp-head {
+  display: flex; align-items: center; gap: 11px; padding: 15px 18px;
+  border-bottom: 1px solid var(--border-soft); background: var(--panel);
+}
+.nlp-mark {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--orange);
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 34px;
+}
+.nlp-headtext { flex: 1; min-width: 0; }
+.nlp-headtext h2 { margin: 0; font-size: 16.5px; font-weight: 800; letter-spacing: -0.01em; }
+.nlp-headtext p { margin: 1px 0 0; font-size: 12px; color: var(--text-secondary); }
+.nlp-body { padding: 16px 18px 18px; }
+.nlp-label {
+  display: block; font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.09em; color: var(--text-secondary); margin: 0 0 6px;
+}
+.nlp-body .nlp-label + .nlp-input { margin-bottom: 14px; }
+.nlp-input {
+  width: 100%; height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0 12px; font-size: 14px; color: var(--text); background: var(--bg);
+  transition: border-color .12s; box-sizing: border-box;
+}
+.nlp-input::placeholder { color: var(--text-faint); }
+.nlp-input:focus { outline: none; border-color: var(--orange); box-shadow: 0 0 0 1px var(--orange); }
+
+/* visibility cards */
+.nlp-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.nlp-card {
+  position: relative; display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+  text-align: left; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg); padding: 12px; cursor: pointer; transition: border-color .12s, box-shadow .12s, background-color .12s;
+}
+.nlp-card:hover { border-color: #c9c9c9; }
+.nlp-card.is-on {
+  border-color: var(--orange); box-shadow: inset 0 0 0 1px var(--orange); background: var(--orange-tint);
+}
+.nlp-card-icon { color: var(--text-secondary); display: inline-flex; }
+.nlp-card.is-on .nlp-card-icon { color: var(--orange); }
+.nlp-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nlp-card-title { font-size: 13.5px; font-weight: 800; color: var(--text); }
+.nlp-card-sub { font-size: 11px; line-height: 1.4; color: var(--text-secondary); }
+.nlp-check {
+  position: absolute; top: 9px; right: 9px; width: 18px; height: 18px; border-radius: 50%;
+  border: 1.5px solid var(--border); display: inline-flex; align-items: center; justify-content: center;
+  color: transparent; background: var(--bg); transition: all .12s;
+}
+.nlp-card.is-on .nlp-check { background: var(--orange); border-color: var(--orange); color: #fff; }
+
+.nlp-note { font-size: 11.5px; line-height: 1.55; color: var(--text-secondary); margin: 8px 0 0; }
+
+.nlp-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.nlp-cancel { height: 36px; padding: 0 14px; font-size: 13px; }
+.nlp-submit { height: 36px; padding: 0 16px; font-size: 13px; font-weight: 700; }
+
+@media (max-width: 640px) {
+  .nlp-choice { grid-template-columns: 1fr; }
+  .nlp-actions { flex-direction: column-reverse; }
+  .nlp-actions .btn { width: 100%; justify-content: center; }
 }

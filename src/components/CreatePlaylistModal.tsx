@@ -128,21 +128,33 @@ export default function CreatePlaylistModal({
 
   return (
     <div className="modal-overlay" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div className="modal modal-sm" role="dialog" aria-modal="true" aria-label={isPublish ? 'Make playlist public' : 'New playlist'}>
-        <div className="modal-head">
-          <h2>{isPublish ? 'Make playlist public' : 'New playlist'}</h2>
+      <div className="modal modal-sm nlp" role="dialog" aria-modal="true" aria-label={isPublish ? 'Make playlist public' : 'New playlist'}>
+        {/* header: orange mark + title */}
+        <div className="nlp-head">
+          <span className="nlp-mark" aria-hidden="true">
+            {isPublish ? (
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="10" r="8.2"/><path d="M2.5 10h15M10 1.8a13 13 0 0 1 0 16.4M10 1.8a13 13 0 0 0 0 16.4"/></svg>
+            ) : (
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round"><path d="M10 4v12M4 10h12"/></svg>
+            )}
+          </span>
+          <div className="nlp-headtext">
+            <h2>{isPublish ? 'Make playlist public' : 'New playlist'}</h2>
+            <p>{isPublish ? 'Publish a shareable link for this playlist' : 'Choose a name and where it lives'}</p>
+          </div>
           <button className="icon-btn" onClick={onClose} aria-label="Close" disabled={busy}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
           </button>
         </div>
-        <div className="modal-body">
+
+        <div className="modal-body nlp-body">
           {!isPublish && (
             <>
-              <label className="field-label" htmlFor="nlp-name">Name</label>
+              <label className="nlp-label" htmlFor="nlp-name">Name</label>
               <input
                 ref={inputRef}
                 id="nlp-name"
-                className="text-input"
+                className="nlp-input"
                 placeholder="My mix"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -153,13 +165,45 @@ export default function CreatePlaylistModal({
                 disabled={busy}
               />
 
-              <label className="field-label">Who can see it?</label>
-              <div className="seg" role="group" aria-label="Visibility">
-                <button className={`seg-btn${visibility === 'private' ? ' is-on' : ''}`} onClick={() => setVisibility('private')} disabled={busy}>
-                  Private <span className="seg-sub">this device only</span>
+              <span className="nlp-label" id="nlp-visibility-label">Who can see it?</span>
+              <div className="nlp-choice" role="radiogroup" aria-labelledby="nlp-visibility-label">
+                {/* private */}
+                <button
+                  role="radio"
+                  aria-checked={visibility === 'private'}
+                  className={`nlp-card${visibility === 'private' ? ' is-on' : ''}`}
+                  onClick={() => setVisibility('private')}
+                  disabled={busy}
+                >
+                  <span className="nlp-card-icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="8.5" width="13" height="8" rx="1.8"/><path d="M6.5 8.5V6.4a3.5 3.5 0 0 1 7 0v2.1"/></svg>
+                  </span>
+                  <span className="nlp-card-text">
+                    <span className="nlp-card-title">Private</span>
+                    <span className="nlp-card-sub">Only on this device — never uploaded</span>
+                  </span>
+                  <span className="nlp-check" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8.5 6.5 12 13 4.5"/></svg>
+                  </span>
                 </button>
-                <button className={`seg-btn${visibility === 'public' ? ' is-on' : ''}`} onClick={() => setVisibility('public')} disabled={busy}>
-                  Public <span className="seg-sub">anyone with the link</span>
+                {/* public */}
+                <button
+                  role="radio"
+                  aria-checked={visibility === 'public'}
+                  className={`nlp-card${visibility === 'public' ? ' is-on' : ''}`}
+                  onClick={() => setVisibility('public')}
+                  disabled={busy}
+                >
+                  <span className="nlp-card-icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="10" r="7.6"/><path d="M2.8 10h14.4M10 2.4a11.4 11.4 0 0 1 0 15.2M10 2.4a11.4 11.4 0 0 0 0 15.2"/></svg>
+                  </span>
+                  <span className="nlp-card-text">
+                    <span className="nlp-card-title">Public</span>
+                    <span className="nlp-card-sub">Anyone with the link can listen</span>
+                  </span>
+                  <span className="nlp-check" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8.5 6.5 12 13 4.5"/></svg>
+                  </span>
                 </button>
               </div>
             </>
@@ -167,7 +211,7 @@ export default function CreatePlaylistModal({
 
           {publicMode && (
             <>
-              <label className="field-label" htmlFor="nlp-slug">Link</label>
+              <label className="nlp-label" htmlFor="nlp-slug">Link</label>
               <div className="slug-field">
                 <span className="slug-prefix">jac-os.pages.dev/</span>
                 <input
@@ -191,22 +235,21 @@ export default function CreatePlaylistModal({
                 {slugState === 'taken' && 'That link is taken.'}
                 {slugState === 'invalid' && (slugProblem(slug) ?? 'Slugs: 3–40 chars, lowercase letters, digits, hyphens.')}
                 {slugState === 'error' && 'Could not reach the server — check your connection.'}
-                {slugState === 'idle' && <>Choose your link, e.g. <span className="slug-preview">{preview}</span></>}
+                {slugState === 'idle' && <>e.g. <span className="slug-preview">{preview}</span></>}
               </div>
-              <p className="modal-help">
-                Public playlists are snapshots hosted by JACo&rsquo;s — no account needed. The link follows your
-                edits automatically, contains the playlist name and track list only, and can be made private
-                again from the playlist page. Your password never leaves this device (there isn&rsquo;t one).
+              <p className="nlp-note">
+                The link shows the playlist name and track list only — no account, no password. It updates automatically
+                when you edit the playlist, and you can make it private again from the playlist page.
               </p>
             </>
           )}
 
-          <div className="download-actions">
-            <button className="btn btn-orange-solid btn-sm" onClick={() => void submit()} disabled={!canSubmit}>
+          <div className="nlp-actions">
+            <button className="btn btn-ghost nlp-cancel" onClick={onClose} disabled={busy}>Cancel</button>
+            <button className="btn btn-orange-solid nlp-submit" onClick={() => void submit()} disabled={!canSubmit}>
               {busy ? <span className="btn-spinner" aria-hidden="true" /> : null}
-              {isPublish ? 'Publish' : visibility === 'public' ? 'Create public playlist' : 'Create playlist'}
+              {isPublish ? 'Publish playlist' : visibility === 'public' ? 'Create public playlist' : 'Create playlist'}
             </button>
-            <button className="btn btn-ghost btn-sm" onClick={onClose} disabled={busy}>Cancel</button>
           </div>
         </div>
       </div>
