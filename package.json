@@ -1,7 +1,7 @@
 {
   "name": "jacos",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "JACo's Soundcloud \u2014 Just Another Copy of Sweden's Soundcloud",
   "license": "MIT",

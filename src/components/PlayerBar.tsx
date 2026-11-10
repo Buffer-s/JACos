@@ -4,7 +4,6 @@ import { artwork } from '../lib/soundcloud';
 import { navigate } from '../lib/router';
 import { TrackArtwork } from './TrackRow';
 import AddToPlaylistButton from './AddToPlaylistButton';
-import DownloadButton from './DownloadButton';
 
 /** seconds -> "m:ss" */
 function fmtClock(total: number): string {
@@ -29,7 +28,6 @@ export default function PlayerBar() {
     shuffle,
     repeat,
     liked,
-    cacheInfo,
     source,
     audio,
     toggle,
@@ -175,7 +173,6 @@ export default function PlayerBar() {
               ) : (
                 <span className="pb-artist">{artistName ?? 'Unknown artist'}</span>
               )}
-              {cacheInfo?.fromCache && <span className="pb-cache">From cache</span>}
             </div>
             {status === 'error' && errorMessage && <div className="pb-error" role="alert">{errorMessage}</div>}
           </div>
@@ -183,7 +180,6 @@ export default function PlayerBar() {
 
         {/* ---- right side: like, clock, volume ---- */}
         <div className="pb-right">
-          <DownloadButton track={current} size="bar" />
           <AddToPlaylistButton track={current} size="bar" />
           <button className={`pb-icon${isLiked ? ' is-on' : ''}`} onClick={() => toggleLike(current)} aria-label={isLiked ? 'Unlike' : 'Like'} aria-pressed={isLiked} title={isLiked ? 'Unlike' : 'Like'}>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">

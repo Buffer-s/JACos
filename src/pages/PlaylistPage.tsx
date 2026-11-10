@@ -10,7 +10,6 @@ import { usePlayer } from '../state/PlayerContext';
 import { fmtCount, fmtFullCount, fmtDate, fmtTotalDuration } from '../lib/format';
 import TrackRow from '../components/TrackRow';
 import ForkButton from '../components/ForkButton';
-import OfflineButton from '../components/OfflineButton';
 import ErrorPanel from '../components/ErrorPanel';
 import Artwork from '../components/Artwork';
 import { toast } from '../lib/toast';
@@ -168,7 +167,6 @@ export default function PlaylistPage({ id }: { id: number }) {
             Shuffle play
           </button>
           <ForkButton name={playlist.title} tracks={tracks} />
-          <OfflineButton tracks={tracks} label="Download for offline" />
         </div>
         <div className="playlist-links">
           <button className="linkish" onClick={() => void copyLink()}>Copy link</button>

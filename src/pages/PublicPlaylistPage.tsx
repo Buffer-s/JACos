@@ -7,7 +7,6 @@ import { navigate } from '../lib/router';
 import TrackRow from '../components/TrackRow';
 import Artwork from '../components/Artwork';
 import ForkButton from '../components/ForkButton';
-import OfflineButton from '../components/OfflineButton';
 import { toast } from '../lib/toast';
 import { hashPlaylistId } from '../lib/localLibrary';
 
@@ -170,7 +169,6 @@ export default function PublicPlaylistPage({ slug }: { slug: string }) {
             Shuffle play
           </button>
           <ForkButton name={playlist.name} tracks={tracks} />
-          <OfflineButton tracks={tracks} label="Download for offline" />
         </div>
         <div className="playlist-links">
           <button className="linkish" onClick={() => void copyLink()}>Copy link</button>

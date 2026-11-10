@@ -3,7 +3,6 @@ import { getLikedTracks, migrateLegacyLikes, replaceLikedTracks, onLocalLibraryC
 import { fmtTotalDuration } from '../lib/format';
 import { usePlayer } from '../state/PlayerContext';
 import TrackRow from '../components/TrackRow';
-import OfflineButton from '../components/OfflineButton';
 import { toast } from '../lib/toast';
 
 export default function LikesPage() {
@@ -62,7 +61,6 @@ export default function LikesPage() {
             <button className="btn btn-orange-solid btn-sm" onClick={playAll} disabled={likes.length === 0 || isLoading}>
               {isLoading ? 'Loading…' : isPlaying ? 'Pause' : 'Play all'}
             </button>
-            {likes.length > 0 && <OfflineButton tracks={likes} label="Offline" className="btn btn-outline btn-sm" />}
             {likes.length > 0 && (
               <button className={`btn btn-ghost btn-sm${confirmingClear ? ' btn-danger-ghost' : ''}`} onClick={clearAll}>
                 {confirmingClear ? 'Really clear all likes?' : 'Clear all'}

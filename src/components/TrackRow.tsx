@@ -1,7 +1,6 @@
 import { usePlayer, type PlaySource } from '../state/PlayerContext';
 import Waveform from './Waveform';
 import AddToPlaylistButton from './AddToPlaylistButton';
-import DownloadButton from './DownloadButton';
 import { artwork, type SCTrack } from '../lib/soundcloud';
 import { fmtCount, fmtDuration } from '../lib/format';
 import Artwork from './Artwork';
@@ -111,7 +110,6 @@ export default function TrackRow({
       <div className="track-time">{fmtDuration(track.duration)}</div>
 
       <div className="track-action-cell">
-        <DownloadButton track={track} />
         {onRemove ? (
           <button className="track-action" onClick={onRemove} aria-label="Remove from this playlist" title="Remove from this playlist">
             <svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><path d="M5 5l8 8M13 5l-8 8"/></svg>
