@@ -2,7 +2,7 @@
 
 **Just Another Copy of Sweden's Soundcloud** — paste a public SoundCloud profile or playlist URL and stream what they publish, straight from SoundCloud's own CDN.
 
-[![version](https://img.shields.io/badge/version-0.1.5-ff5500.svg)](package.json)
+[![version](https://img.shields.io/badge/version-0.1.6-ff5500.svg)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-ff5500.svg)](LICENSE)
 
 Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all audio belongs to its uploaders.
@@ -85,9 +85,14 @@ Settings, **SoundCloud connection**: source of the `client_id`, remembered route
 
 Settings, **About**: version and build timestamp of the running build, GitHub link, and a page reload button.
 
-The footer's `v0.1.5` comes from `package.json` at build time (see `src/lib/buildInfo.ts`) — if the live site shows an older number, the deploy is stale, not the code.
+The version in the footer comes from `package.json` at build time (see `src/lib/buildInfo.ts`) — if the live site shows an older number, the deploy is stale, not the code.
 
 ## Changelog
+
+### 0.1.6
+
+- Fresh release so Cloudflare Pages builds and publishes the current `main` again (a new commit on `main` is what triggers the deploy).
+- No behaviour changes: same playback chain, cache and settings as 0.1.5 — the footer and Settings → About now read `v0.1.6` with a new build timestamp, which is the proof the deploy landed.
 
 ### 0.1.5
 
