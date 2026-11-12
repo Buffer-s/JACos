@@ -21,7 +21,7 @@ import {
   type AudioCacheStats,
 } from '../lib/audioCache';
 import { forgetSourceMemory, getDownloadApi, getSourceMemory, setDownloadApi, type SourceMemory } from '../lib/mediaSources';
-import { version } from '../../package.json';
+import { appVersion, buildLabel } from '../lib/buildInfo';
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme';
 import { removeKey } from '../lib/storage';
 import { toast } from '../lib/toast';
@@ -332,11 +332,21 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
           <section className="modal-section">
             <h3>About</h3>
             <p className="modal-help" style={{ marginBottom: 12 }}>
-              JACo&rsquo;s Soundcloud v{version} — open source (MIT), made by Buffer. Not affiliated with SoundCloud AB.
+              JACo&rsquo;s Soundcloud v{appVersion} — {buildLabel()}. Open source (MIT), made by Buffer. Not
+              affiliated with SoundCloud AB.
             </p>
-            <a className="btn btn-dark btn-sm" href={GITHUB_URL} target="_blank" rel="noreferrer">
-              <GitHubMark size={15} /> View on GitHub
-            </a>
+            <p className="modal-help" style={{ marginBottom: 12 }}>
+              The version and build time come from the build itself. If the site looks older than the change you
+              shipped, reload — a stale page is a stale deploy, not a missing commit.
+            </p>
+            <div className="field-row">
+              <a className="btn btn-dark btn-sm" href={GITHUB_URL} target="_blank" rel="noreferrer">
+                <GitHubMark size={15} /> View on GitHub
+              </a>
+              <button className="btn btn-ghost btn-sm" onClick={() => window.location.reload()}>
+                Reload page
+              </button>
+            </div>
           </section>
         </div>
       </div>

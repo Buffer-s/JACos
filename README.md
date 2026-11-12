@@ -2,7 +2,7 @@
 
 **Just Another Copy of Sweden's Soundcloud** — paste a public SoundCloud profile or playlist URL and stream what they publish, straight from SoundCloud's own CDN.
 
-[![version](https://img.shields.io/badge/version-0.1.4-ff5500.svg)](package.json)
+[![version](https://img.shields.io/badge/version-0.1.5-ff5500.svg)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-ff5500.svg)](LICENSE)
 
 Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all audio belongs to its uploaders.
@@ -70,7 +70,8 @@ npx wrangler pages dev dist
 1. Fork this repo.
 2. Create a Pages project connected to the fork (or push to your own).
 3. Build command `npm run build`, output directory `dist`. `public/_redirects` ships the SPA fallback; `functions/` is picked up automatically as a Pages Function — that's the whole setup.
-4. Optional: set the `SOUNDCLOUD_CLIENT_ID` environment variable to pin a client_id instead of scraping.
+4. Every push to `main` rebuilds the site. Check the footer tooltip (or Settings → About) for the build time to confirm the deploy you are looking at is the one you just shipped.
+5. Optional: set the `SOUNDCLOUD_CLIENT_ID` environment variable to pin a client_id instead of scraping.
 
 ## Routes
 
@@ -82,7 +83,17 @@ Gear icon → Settings, **Playback & cache**: cache usage and on/off, cached-aud
 
 Settings, **SoundCloud connection**: source of the `client_id`, remembered route, test connection, optional custom `client_id` / CORS proxy for non-Pages hosting.
 
+Settings, **About**: version and build timestamp of the running build, GitHub link, and a page reload button.
+
+The footer's `v0.1.5` comes from `package.json` at build time (see `src/lib/buildInfo.ts`) — if the live site shows an older number, the deploy is stale, not the code.
+
 ## Changelog
+
+### 0.1.5
+
+- **Build stamp** — the version in the footer is the version that build was made from, and the footer tooltip plus Settings → About show the build time (injected by `vite.config.ts`, no hardcoded numbers anywhere). A page that looks older than your change is a stale deploy, and now you can prove it.
+- **Reload page** button in Settings → About for exactly that situation.
+- Version 0.1.5.
 
 ### 0.1.4
 
