@@ -5,7 +5,7 @@ import PlayerBar from './components/PlayerBar';
 import Toasts from './components/Toasts';
 import Logo from './components/Logo';
 import GitHubMark from './components/GitHubMark';
-import { version } from '../package.json';
+import { appVersion, buildTitle } from './lib/buildInfo';
 import { useEffect } from 'react';
 import Home from './pages/Home';
 import UserPage from './pages/UserPage';
@@ -68,7 +68,7 @@ function Footer() {
         </div>
       </div>
       <div className="container footer-base">
-        <span>© {new Date().getFullYear()} Buffer · JACos v{version}</span>
+        <span title={buildTitle()}>© {new Date().getFullYear()} Buffer · JACos v{appVersion}</span>
         <a href={GITHUB_URL} target="_blank" rel="noreferrer">github.com/bufferclick/JACos</a>
       </div>
     </footer>
