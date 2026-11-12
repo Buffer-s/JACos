@@ -9,10 +9,12 @@ import {
   type ReactNode,
 } from 'react';
 import type Hls from 'hls.js';
-import { getStreamUrl, type SCTrack } from '../lib/soundcloud';
+import type { SCTrack } from '../lib/soundcloud';
 import { toast } from '../lib/toast';
 import { readString, writeString } from '../lib/storage';
 import { getLikedTracks, toggleLikedTrack } from '../lib/localLibrary';
+import { getCachedAudio, putCachedAudio, removeCachedAudio } from '../lib/audioCache';
+import { buildAudioChain, cacheTrackAudio, rememberSourceResult, type AudioSource } from '../lib/mediaSources';
 
 export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -55,6 +57,54 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 const isFullTrack = (t: SCTrack | { kind?: string; id: number }): t is SCTrack =>
   !!t && typeof t === 'object' && typeof (t as SCTrack).duration === 'number';
 
+/** How long a source gets to produce audio before the next one is tried. */
+const SOURCE_TIMEOUT_MS = 12_000;
+/** Sanity cap on automatic source switches for one track. */
+const MAX_FALLBACKS = 6;
+
+interface LoadOptions {
+  /** sources (and `cache`) already tried for this track */
+  skip?: Set<string>;
+  /** fallback depth — 0 for a normal user-initiated play */
+  attempt?: number;
+}
+
+/** Resolve as soon as the media element can actually play, reject on error/timeout. */
+function waitForPlayable(audio: HTMLAudioElement, timeoutMs = SOURCE_TIMEOUT_MS): { promise: Promise<void>; cancel: () => void } {
+  let cleanup = () => {};
+  const promise = new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const finish = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (err) reject(err);
+      else resolve();
+    };
+    const onReady = () => finish();
+    const onError = () => finish(new Error('the audio element reported an error'));
+    const timer = setTimeout(() => finish(new Error('timed out waiting for audio')), timeoutMs);
+    cleanup = () => {
+      clearTimeout(timer);
+      audio.removeEventListener('canplay', onReady);
+      audio.removeEventListener('loadeddata', onReady);
+      audio.removeEventListener('error', onError);
+    };
+    audio.addEventListener('canplay', onReady);
+    audio.addEventListener('loadeddata', onReady);
+    audio.addEventListener('error', onError);
+  });
+  return {
+    promise,
+    cancel: () => {
+      cleanup();
+      promise.catch(() => {
+        /* abandoned probe */
+      });
+    },
+  };
+}
+
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [audio] = useState(() => {
     const a = new Audio();
@@ -94,6 +144,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   repeatRef.current = repeat;
   const shuffleRef = useRef(shuffle);
   shuffleRef.current = shuffle;
+  const objectUrlRef = useRef<string | null>(null);
+  /** true while the fallback chain is probing — the global error handler stays quiet */
+  const attemptingRef = useRef(false);
+  /** the source currently attached, e.g. `hls:aac_160k` or `cache` */
+  const activeKeyRef = useRef<string | null>(null);
+  const currentTrackRef = useRef<SCTrack | null>(null);
+  const skipRef = useRef<Set<string>>(new Set());
+  const fallbackDepthRef = useRef(0);
+  const loadRef = useRef<(track: SCTrack, opts?: LoadOptions) => Promise<void>>(async () => {});
 
   /* ---------------- track loading ---------------- */
 
@@ -127,64 +186,277 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [scSourceUrl],
   );
 
+  /** Tear down whatever source is attached, without touching `current`. */
+  const releaseSource = useCallback(() => {
+    destroyHls();
+    if (objectUrlRef.current) {
+      try {
+        URL.revokeObjectURL(objectUrlRef.current);
+      } catch {
+        /* ignore */
+      }
+      objectUrlRef.current = null;
+    }
+    try {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+    } catch {
+      /* ignore */
+    }
+    activeKeyRef.current = null;
+  }, [audio, destroyHls]);
+
+  /**
+   * Attach one URL to the audio element and wait until it is actually
+   * playable. Resolves on success, throws when this source is a dud so the
+   * caller can move on to the next one.
+   */
+  const attachSource = useCallback(
+    async (
+      track: SCTrack,
+      url: string,
+      kind: AudioSource['kind'],
+      sourceKey: string,
+      token: number,
+      skip: Set<string>,
+      attempt: number,
+    ): Promise<void> => {
+      if (kind === 'hls') {
+        let attached = false;
+        try {
+          const { default: HlsJs } = await import('hls.js'); // code-split: only loaded for HLS sources
+          if (token !== loadToken.current) throw new Error('superseded');
+          if (HlsJs.isSupported()) {
+            const hls = new HlsJs({ enableWorker: true, lowLatencyMode: false });
+            hlsRef.current = hls;
+            await new Promise<void>((resolve, reject) => {
+              let settled = false;
+              let switched = false;
+              const fail = (message: string) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                reject(new Error(message));
+              };
+              const timer = setTimeout(() => fail('the HLS playlist did not load in time'), SOURCE_TIMEOUT_MS);
+              const switchToNext = () => {
+                if (switched || token !== loadToken.current || attempt >= MAX_FALLBACKS) return;
+                switched = true;
+                const nextSkip = new Set(skip);
+                nextSkip.add(sourceKey);
+                void loadRef.current(track, { skip: nextSkip, attempt: attempt + 1 });
+              };
+              hls.on(HlsJs.Events.MANIFEST_PARSED, () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve();
+              });
+              hls.on(HlsJs.Events.ERROR, (_evt, data) => {
+                if (!data?.fatal) return;
+                // before playback starts this is just a bad source; afterwards
+                // it means the stream died mid-track — retry on another one.
+                if (!settled) fail(`HLS error: ${data.details ?? 'fatal'}`);
+                else switchToNext();
+              });
+              hls.loadSource(url);
+              hls.attachMedia(audio);
+            });
+            attached = true;
+          }
+        } catch (err) {
+          if (token !== loadToken.current) throw err;
+          /* hls.js missing or unusable — Safari plays HLS natively */
+        }
+        if (attached) {
+          const probe = waitForPlayable(audio);
+          try {
+            await probe.promise;
+          } catch (err) {
+            probe.cancel();
+            throw err;
+          }
+          return;
+        }
+        audio.src = url;
+        audio.load();
+      } else {
+        // progressive MP3 / external file: <audio> does not need CORS to play
+        audio.src = url;
+        audio.load();
+      }
+
+      const probe = waitForPlayable(audio);
+      try {
+        await probe.promise;
+      } catch (err) {
+        probe.cancel();
+        throw err;
+      }
+    },
+    [audio],
+  );
+
   const loadAndPlay = useCallback(
-    async (track: SCTrack) => {
+    async (track: SCTrack, opts: LoadOptions = {}) => {
       const token = ++loadToken.current;
-      destroyHls();
+      const skip = new Set(opts.skip ?? []);
+      const attempt = opts.attempt ?? 0;
+      const superseded = () => token !== loadToken.current;
+
+      skipRef.current = skip;
+      fallbackDepthRef.current = Math.max(fallbackDepthRef.current, attempt);
+      if (attempt === 0) fallbackDepthRef.current = 0;
+
+      attemptingRef.current = true;
+      releaseSource();
+      currentTrackRef.current = track;
       setCurrent(track);
       setStatus('loading');
       setErrorMessage(null);
       setDuration((track.duration || 0) / 1000);
 
-      try {
-        const stream = await getStreamUrl(track);
-        if (token !== loadToken.current) return; // superseded by a newer selection
-        if (!stream) {
-          reportFailure(track, 'This track has no playable stream (it may be region-locked or disabled by the uploader).');
-          return;
-        }
-
-        if (stream.kind === 'hls') {
-          let attached = false;
-          try {
-            const { default: HlsJs } = await import('hls.js'); // code-split: only loaded for HLS-only tracks
-            if (token !== loadToken.current) return;
-            if (HlsJs.isSupported()) {
-              const hls = new HlsJs({ enableWorker: true, lowLatencyMode: false });
-              hls.on(HlsJs.Events.ERROR, (_evt, data) => {
-                if (data?.fatal && token === loadToken.current) {
-                  reportFailure(track, 'The stream failed to load (it may be region-locked or blocked for you).');
-                }
-              });
-              hls.loadSource(stream.url);
-              hls.attachMedia(audio);
-              hlsRef.current = hls;
-              attached = true;
-            }
-          } catch {
-            /* fall through to native playback */
-          }
-          if (!attached) audio.src = stream.url; // Safari: native HLS
-          if (token !== loadToken.current) return;
-        } else {
-          // progressive MP3: <audio> does not need CORS, so play it straight from the CDN
-          audio.src = stream.url;
-        }
-
+      const play = async () => {
         try {
           await audio.play();
         } catch {
-          if (token === loadToken.current) setStatus('paused');
+          if (!superseded()) setStatus('paused');
         }
+      };
+
+      const tried: string[] = [];
+
+      try {
+        /* ---- 1. the cache: instant, offline, known to have worked before ---- */
+        if (!skip.has('cache')) {
+          const cached = await getCachedAudio(track.id);
+          if (superseded()) return;
+          if (cached) {
+            const url = URL.createObjectURL(cached);
+            objectUrlRef.current = url;
+            activeKeyRef.current = 'cache';
+            audio.src = url;
+            audio.load();
+            const probe = waitForPlayable(audio, 8_000);
+            try {
+              await probe.promise;
+              if (superseded()) {
+                probe.cancel();
+                return;
+              }
+              attemptingRef.current = false;
+              await play();
+              return;
+            } catch {
+              probe.cancel();
+              if (superseded()) return;
+              // a damaged cache entry must never block the track
+              await removeCachedAudio(track.id);
+              releaseSource();
+            }
+          }
+        }
+
+        /* ---- 2. the network chain, best-known source first ---- */
+        const chain = buildAudioChain(track);
+        if (superseded()) return;
+        if (chain.length === 0) {
+          reportFailure(
+            track,
+            'This track has no playable stream — it may be region-locked or disabled by the uploader.',
+          );
+          return;
+        }
+
+        for (const source of chain) {
+          if (superseded()) return;
+          if (skip.has(source.key)) continue;
+          try {
+            const url = await source.resolveUrl();
+            if (superseded()) return;
+            activeKeyRef.current = source.key;
+            await attachSource(track, url, source.kind, source.key, token, skip, attempt);
+            if (superseded()) return;
+
+            rememberSourceResult(track.id, source.key, true);
+            if (tried.length > 0) {
+              toast(`That stream failed — playing from a backup source (${source.label}).`);
+            }
+            attemptingRef.current = false;
+            fallbackDepthRef.current = attempt;
+            // Fill the cache from whichever source is delivering audio.
+            void cacheTrackAudio(track, source);
+            await play();
+            return;
+          } catch {
+            if (superseded()) return;
+            rememberSourceResult(track.id, source.key, false);
+            tried.push(source.label);
+            releaseSource();
+          }
+        }
+
+        if (superseded()) return;
+
+        /* ---- 3. last resort: download the audio and play it from memory ---- */
+        // Streaming can fail while downloading works (HLS quirks, CORS on
+        // media, half-broken presets). Join the file ourselves, play the blob
+        // and keep it in the cache so this track never has to be fetched again.
+        for (const source of chain) {
+          if (superseded()) return;
+          if (skip.has(source.key)) continue;
+          try {
+            const blob = await source.download();
+            if (superseded()) return;
+            if (!blob || blob.size === 0) continue;
+            const url = URL.createObjectURL(blob);
+            objectUrlRef.current = url;
+            activeKeyRef.current = `${source.key} (download)`;
+            audio.src = url;
+            audio.load();
+            const probe = waitForPlayable(audio, 12_000);
+            try {
+              await probe.promise;
+            } catch (err) {
+              probe.cancel();
+              releaseSource();
+              throw err;
+            }
+            if (superseded()) return;
+            rememberSourceResult(track.id, source.key, true);
+            if (tried.length > 0) {
+              toast(`Streamed playback failed — downloaded the track instead (${source.label}).`);
+            }
+            // keep what we just downloaded
+            void putCachedAudio(track.id, blob, { title: track.title, source: source.key });
+            attemptingRef.current = false;
+            await play();
+            return;
+          } catch {
+            if (superseded()) return;
+            releaseSource();
+          }
+        }
+
+        if (superseded()) return;
+        reportFailure(
+          track,
+          `No working source for “${track.title}” — tried ${tried.length} of ${chain.length} (${tried.join(', ')}).`,
+        );
       } catch (err) {
-        if (token !== loadToken.current) return;
+        if (superseded()) return;
         const message = err instanceof Error ? err.message : 'Could not load this track.';
         setStatus('error');
         setErrorMessage(message);
+      } finally {
+        if (!superseded()) attemptingRef.current = false;
       }
     },
-    [audio, destroyHls, reportFailure],
+    [attachSource, audio, releaseSource, reportFailure],
   );
+
+  loadRef.current = loadAndPlay;
 
   const playQueue = useCallback(
     (tracks: SCTrack[], startIndex: number, src: PlaySource) => {
@@ -243,9 +515,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const toggle = useCallback(() => {
     if (!current) return;
+    // pressing play on a failed track retries the whole source chain
+    if (status === 'error') {
+      void loadAndPlay(current);
+      return;
+    }
     if (status === 'playing') audio.pause();
     else void audio.play().catch(() => setStatus('paused'));
-  }, [audio, current, status]);
+  }, [audio, current, status, loadAndPlay]);
 
   const seekTo = useCallback(
     (seconds: number) => {
@@ -300,6 +577,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     audio.volume = muted ? 0 : volume;
   }, [audio, volume, muted]);
 
+  // release the object URL / hls instance when the app unmounts
+  useEffect(
+    () => () => {
+      if (objectUrlRef.current) {
+        try {
+          URL.revokeObjectURL(objectUrlRef.current);
+        } catch {
+          /* ignore */
+        }
+        objectUrlRef.current = null;
+      }
+      destroyHls();
+    },
+    [destroyHls],
+  );
+
   useEffect(() => {
     const onPlay = () => setStatus('playing');
     const onPause = () => setStatus((s) => (s === 'loading' ? s : 'paused'));
@@ -315,16 +608,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       next();
     };
     const onError = () => {
-      const t = queueRef.current[indexRef.current];
-      setStatus('error');
-      const message = 'The stream failed to load. Try again, or check Settings → connection.';
-      setErrorMessage(message);
-      if (t) {
-        toast(message, {
-          actionLabel: 'Open on SoundCloud',
-          onAction: () => window.open(scSourceUrl(t), '_blank', 'noopener'),
-        });
+      const t = currentTrackRef.current;
+      // mid-probe or tearing the element down (empty src) — not a real failure
+      if (attemptingRef.current || !t) return;
+
+      // a source that dies mid-playback: walk to the next one, then to the cache
+      const key = activeKeyRef.current;
+      if (fallbackDepthRef.current < MAX_FALLBACKS) {
+        const nextSkip = new Set(skipRef.current);
+        if (key) nextSkip.add(key);
+        fallbackDepthRef.current += 1;
+        void loadRef.current(t, { skip: nextSkip, attempt: fallbackDepthRef.current });
+        return;
       }
+
+      const message = 'The stream failed to load. Try again, or check Settings → connection.';
+      setStatus('error');
+      setErrorMessage(message);
+      toast(message, {
+        actionLabel: 'Open on SoundCloud',
+        onAction: () => window.open(scSourceUrl(t), '_blank', 'noopener'),
+      });
     };
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);

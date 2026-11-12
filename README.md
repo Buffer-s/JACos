@@ -2,7 +2,7 @@
 
 **Just Another Copy of Sweden's Soundcloud** — paste a public SoundCloud profile or playlist URL and stream what they publish, straight from SoundCloud's own CDN.
 
-[![version](https://img.shields.io/badge/version-0.1.3-ff5500.svg)](package.json)
+[![version](https://img.shields.io/badge/version-0.1.4-ff5500.svg)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-ff5500.svg)](LICENSE)
 
 Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all audio belongs to its uploaders.
@@ -18,9 +18,11 @@ Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all
 - **SoundCloud's actual catalog and rules** — unavailable or uploader-blocked tracks are simply not playable; everything public that SoundCloud allows streams here.
 - **Zero-config connection** — on Cloudflare Pages a tiny built-in **Pages Function** (`functions/api/sc`) talks to SoundCloud server-side and handles the web player's `client_id` handshake automatically. Nothing to paste, nothing to sign up for.
 - **Static-host fallback** — if the build is hosted somewhere without Functions, JACos falls back to a browser route chain with an auto-detected, verified `client_id` (and remembers the route that works). A custom `client_id` and CORS proxy can be set in Settings as an escape hatch. Stuck connection? Settings → **Reset connection** clears the remembered state.
+- **Never trusts one stream** — every track gets a source chain: cached copy → each SoundCloud transcoding (progressive MP3, then every HLS preset) → your own download API, if you configured one. The first source that plays wins, is remembered for that track *and* for the tracks that follow, and its audio is downloaded in the background into the browser cache. A track that failed yesterday starts from the source that worked today.
+- **Downloads what it can** — when a format won't stream in `<audio>`, JACos downloads it through the API instead (progressive files directly, HLS by fetching the playlist plus every segment and joining them), verifies the result, and stores it in Cache Storage. Replays never touch the network.
 - **Tracklist parity** — plays, duration, likes and waveform-style seeks, just like the real thing. Because it is a copy of the real thing.
 
-> Note on playback: tracks stream straight from SoundCloud's CDN (`<audio>` for progressive MP3s, hls.js for HLS) — JACo's keeps nothing on disk and nothing on its servers. Tracks that are region-locked or uploader-disabled on SoundCloud can't play here either; uploader-blocked or HLS-only files occasionally fail to start, same as on any non-SoundCloud client.
+> Note on playback: audio comes straight from SoundCloud's CDN — `<audio>` for progressive MP3s, hls.js (or every HLS preset, one after another) for HLS — and the winning copy is cached in your browser (`Cache Storage`, opt-out in Settings). Nothing is kept on JACo's servers. Tracks that are region-locked or uploader-disabled on SoundCloud can't play here either; everything else gets as many attempts as SoundCloud offers formats.
 
 ## How it works
 
@@ -39,8 +41,10 @@ Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all
 - The SPA is a static Vite + React build. Audio goes straight from SoundCloud's CDN to the browser; JACo's stores nothing server-side, ever.
 - Public playlists are the one place JACo's keeps data: a Supabase table of slug → track-ID snapshots, written anonymously (insert-only for everyone; updates/deletes require the creator's per-playlist editor key). No accounts, no analytics.
 - `functions/api/sc` is a generic, server-side bridge to `https://api-v2.soundcloud.com`. It scrapes the same `client_id` the web player uses (or `SOUNDCLOUD_CLIENT_ID` if set), caches it in memory, retries once on 401, and negative-caches upstream failures briefly.
-- Stream URLs are short-lived, signed CDN URLs. The browser streams (progressive or HLS via hls.js) straight from SoundCloud.
-- Nothing is written to disk — not on the server, not in the browser. Audio is streamed, never stored.
+- Stream URLs are short-lived, signed CDN URLs. The browser tries each one in order (`src/lib/mediaSources.ts`) and moves on the moment one fails to produce audio — a dead preset costs a few seconds, not the track.
+- The source that worked is remembered per track and globally (`source_pref` / `source_stats` in localStorage), so the next attempt starts with it. Global winners reorder the chain for everything else too.
+- After playback starts, the winner is downloaded in the background (HLS playlists are resolved and their segments joined) and stored in the browser's Cache Storage. The cache is checked before any network call, so cached tracks start instantly and survive CDN outages. Ceiling: 300 MB / 400 tracks, oldest evicted first; turn it off or clear it in Settings → Playback & cache.
+- Nothing is written on the server. Audio lives in the browser cache only, and only when caching is on.
 
 ## Develop
 
@@ -74,7 +78,19 @@ Hash routes: `#/`, `#/user/<permalink>`, `#/playlist/<id>`, `#/search/<query>`, 
 
 ## Settings
 
-Gear icon → Settings: audio cache stats and clearing, and the SoundCloud connection (source of the `client_id`, remembered route, test connection, optional custom `client_id` / CORS proxy for non-Pages hosting).
+Gear icon → Settings, **Playback & cache**: cache usage and on/off, cached-audio clearing, the source scoreboard (which format has been winning for you), "Forget source memory", and an optional **download API** endpoint used when SoundCloud's own formats won't play (JSON with `downloadUrl`, `url` or `audio`).
+
+Settings, **SoundCloud connection**: source of the `client_id`, remembered route, test connection, optional custom `client_id` / CORS proxy for non-Pages hosting.
+
+## Changelog
+
+### 0.1.4
+
+- **Multi-source playback chain** — cached copy → every SoundCloud transcoding (progressive, then all HLS presets) → optional custom download API. The player walks the chain until something actually plays, instead of betting on one URL.
+- **Source memory** — the winning source is remembered per track and globally, so the next play starts with whatever is working on your network. Player error now retries on the next source (up to 6 hops) instead of stopping, and pressing play on a failed track re-runs the whole chain.
+- **Audio cache** — the winning source is downloaded (HLS playlists are fetched and their segments joined) and stored in Cache Storage; cached audio is played before any network call, damaged entries are dropped automatically. 300 MB / 400 tracks ceiling, LRU eviction, on/off switch and stats in Settings → Playback & cache.
+- **Download API setting** — plug your own resolver/downloader (`?url=` or a `{url}` placeholder, JSON with `downloadUrl`) in as the last resort.
+- Version 0.1.4 (first release after 0.1.3).
 
 ## Contributing
 
