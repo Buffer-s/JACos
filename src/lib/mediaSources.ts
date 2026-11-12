@@ -19,7 +19,7 @@
  * what makes "a song that didn't work before" work next time.
  */
 
-import { getStreamCandidates, type SCTrack } from './soundcloud';
+import { getStreamCandidates, hydrateTrack, type SCTrack } from './soundcloud';
 import { getCachedAudio, hasCachedAudio, isAudioCacheEnabled, putCachedAudio, MAX_TRACK_BYTES } from './audioCache';
 import { readJSON, readString, removeKey, writeJSON, writeString } from './storage';
 
@@ -307,9 +307,14 @@ async function resolveDownloadApi(track: SCTrack): Promise<string> {
 /**
  * Ordered list of network sources to try for a track. The player walks it
  * until one produces audio; empty list = SoundCloud says nothing is playable.
+ *
+ * Hydrates first: search rows and playlist stubs often arrive without
+ * `media.transcodings`, and building a chain from those produced an empty list
+ * — i.e. "this track has no playable stream" without a single attempt.
  */
-export function buildAudioChain(track: SCTrack): AudioSource[] {
-  const sources: AudioSource[] = getStreamCandidates(track).map((candidate) => ({
+export async function buildAudioChain(track: SCTrack): Promise<AudioSource[]> {
+  const full = await hydrateTrack(track).catch(() => track);
+  const sources: AudioSource[] = getStreamCandidates(full).map((candidate) => ({
     key: candidate.key,
     label: candidate.label,
     kind: candidate.kind,
@@ -333,7 +338,7 @@ export function buildAudioChain(track: SCTrack): AudioSource[] {
     });
   }
 
-  return orderByMemory(track.id, sources);
+  return orderByMemory(full.id, sources);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -375,7 +380,7 @@ export async function cacheTrackAudio(
   try {
     return await withSlot(async () => {
       if (await getCachedAudio(track.id)) return null;
-      const chain = buildAudioChain(track);
+      const chain = await buildAudioChain(track);
       const rank = (source: AudioSource) => source.cacheRank ?? 2;
       const rest = chain.filter((source) => source.key !== winner?.key).sort((a, b) => rank(a) - rank(b));
       // Prefer a file that plays straight from a blob: the winning source when

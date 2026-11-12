@@ -431,6 +431,81 @@ async function apiFetch<T = unknown>(pathOrUrl: string, params: Params = {}): Pr
 }
 
 /* -------------------------------------------------------------------------- */
+/* Track hydration — list/search results arrive without stream formats       */
+/* -------------------------------------------------------------------------- */
+
+const fullTrackCache = new Map<number, { track: SCTrack; expires: number }>();
+
+/** Does this object actually carry stream formats? */
+export function hasStreamFormats(track: SCTrack | null | undefined): boolean {
+  return !!track && (track.media?.transcodings?.length ?? 0) > 0;
+}
+
+/**
+ * `/tracks/{id}` — the complete track object. Search rows and some playlist
+ * stubs omit `media.transcodings` (and `track_authorization`), which is what
+ * used to make perfectly playable tracks report "no playable stream".
+ */
+export async function getTrackById(id: number): Promise<SCTrack> {
+  if (!Number.isFinite(id)) throw new ApiError(0, 'Invalid track id.');
+  const hit = fullTrackCache.get(id);
+  if (hit && hit.expires > Date.now()) return hit.track;
+
+  const raw = await apiFetch<any>(`/tracks/${id}`);
+  if (!raw || typeof raw.id !== 'number') throw new ApiError(0, 'SoundCloud returned no track data.');
+  const track = mapTrack(raw) as SCTrack;
+  if (fullTrackCache.size > 200) fullTrackCache.clear();
+  fullTrackCache.set(id, { track, expires: Date.now() + 5 * MIN });
+  return track;
+}
+
+/** Display fields from the list row, stream fields from the full object. */
+function mergeTrack(shallow: SCTrack, full: SCTrack): SCTrack {
+  return {
+    ...full,
+    ...shallow,
+    media: full.media,
+    track_authorization: full.track_authorization ?? shallow.track_authorization,
+    policy: full.policy ?? shallow.policy,
+    streamable: full.streamable ?? shallow.streamable,
+    duration: shallow.duration || full.duration,
+    artwork_url: shallow.artwork_url ?? full.artwork_url,
+    user: shallow.user ?? full.user,
+  };
+}
+
+/**
+ * Fill in a track's missing stream data before playback gives up on it:
+ * full track by id first, then `/resolve` on its permalink as a second opinion.
+ * Returns the original object unchanged when there is genuinely nothing to play.
+ */
+export async function hydrateTrack(track: SCTrack): Promise<SCTrack> {
+  if (!track || typeof track.id !== 'number') return track;
+  if (hasStreamFormats(track) || track.streamable === false || track.policy === 'BLOCK') return track;
+
+  try {
+    const full = await getTrackById(track.id);
+    if (hasStreamFormats(full) || full.streamable === false || full.policy === 'BLOCK') {
+      return mergeTrack(track, full);
+    }
+  } catch {
+    /* fall through to the permalink route */
+  }
+
+  if (track.permalink_url) {
+    try {
+      const resolved = await resolveUrl(track.permalink_url);
+      if (resolved.kind === 'track' && (hasStreamFormats(resolved.track) || resolved.track.streamable === false)) {
+        return mergeTrack(track, resolved.track);
+      }
+    } catch {
+      /* nothing else to try */
+    }
+  }
+  return track;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Mapping (raw api-v2 passes through — the UI reads api-v2 field names)      */
 /* -------------------------------------------------------------------------- */
 
