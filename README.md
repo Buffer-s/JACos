@@ -2,7 +2,7 @@
 
 **Just Another Copy of Sweden's Soundcloud** — paste a public SoundCloud profile or playlist URL and stream what they publish, straight from SoundCloud's own CDN.
 
-[![version](https://img.shields.io/badge/version-0.1.6-ff5500.svg)](package.json)
+[![version](https://img.shields.io/badge/version-0.1.7-ff5500.svg)](package.json)
 [![license](https://img.shields.io/badge/license-MIT-ff5500.svg)](LICENSE)
 
 Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all audio belongs to its uploaders.
@@ -18,7 +18,7 @@ Open source (MIT), made by **Buffer**. Not affiliated with SoundCloud AB — all
 - **SoundCloud's actual catalog and rules** — unavailable or uploader-blocked tracks are simply not playable; everything public that SoundCloud allows streams here.
 - **Zero-config connection** — on Cloudflare Pages a tiny built-in **Pages Function** (`functions/api/sc`) talks to SoundCloud server-side and handles the web player's `client_id` handshake automatically. Nothing to paste, nothing to sign up for.
 - **Static-host fallback** — if the build is hosted somewhere without Functions, JACos falls back to a browser route chain with an auto-detected, verified `client_id` (and remembers the route that works). A custom `client_id` and CORS proxy can be set in Settings as an escape hatch. Stuck connection? Settings → **Reset connection** clears the remembered state.
-- **Never trusts one stream** — every track gets a source chain: cached copy → each SoundCloud transcoding (progressive MP3, then every HLS preset) → your own download API, if you configured one. The first source that plays wins, is remembered for that track *and* for the tracks that follow, and its audio is downloaded in the background into the browser cache. A track that failed yesterday starts from the source that worked today.
+- **Never trusts one stream** — every track gets a source chain: cached copy → each SoundCloud transcoding (progressive MP3, then every HLS preset) → your own download API, if you configured one. Search rows are hydrated to their full track object first, because api-v2 search results ship without stream formats. The first source that plays wins, is remembered for that track *and* for the tracks that follow, and its audio is downloaded in the background into the browser cache. A track that failed yesterday starts from the source that worked today.
 - **Downloads what it can** — when a format won't stream in `<audio>`, JACos downloads it through the API instead (progressive files directly, HLS by fetching the playlist plus every segment and joining them), verifies the result, and stores it in Cache Storage. Replays never touch the network.
 - **Tracklist parity** — plays, duration, likes and waveform-style seeks, just like the real thing. Because it is a copy of the real thing.
 
@@ -88,6 +88,13 @@ Settings, **About**: version and build timestamp of the running build, GitHub li
 The version in the footer comes from `package.json` at build time (see `src/lib/buildInfo.ts`) — if the live site shows an older number, the deploy is stale, not the code.
 
 ## Changelog
+
+### 0.1.7
+
+- **Fixed "This track has no playable stream" on search results.** api-v2 `/search/tracks` returns shallow rows without `media.transcodings`, so the source chain was built from nothing and playback gave up without a single attempt — even for tracks that play fine on soundcloud.com. The player now hydrates the track first (`/tracks/{id}`, then `/resolve` on the permalink), which brings back every format *and* `track_authorization`.
+- Hydrated tracks are remembered for 5 minutes, so the extra lookup happens once per track; already-full tracks (playlists, likes) never make it.
+- Failure messages now say which case it is: uploader disabled streaming (`streamable: false`), region-blocked (`policy: BLOCK`/`DENY`), or "SoundCloud listed no formats".
+- Version 0.1.7.
 
 ### 0.1.6
 

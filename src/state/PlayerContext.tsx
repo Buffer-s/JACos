@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import type Hls from 'hls.js';
-import type { SCTrack } from '../lib/soundcloud';
+import { hydrateTrack, type SCTrack } from '../lib/soundcloud';
 import { toast } from '../lib/toast';
 import { readString, writeString } from '../lib/storage';
 import { getLikedTracks, toggleLikedTrack } from '../lib/localLibrary';
@@ -56,6 +56,17 @@ const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 const isFullTrack = (t: SCTrack | { kind?: string; id: number }): t is SCTrack =>
   !!t && typeof t === 'object' && typeof (t as SCTrack).duration === 'number';
+
+/** Precise wording for "we tried nothing because SoundCloud offered nothing". */
+function noSourceReason(track: SCTrack): string {
+  if (track.streamable === false) {
+    return 'The uploader disabled streaming for this track.';
+  }
+  if (track.policy === 'BLOCK' || track.policy === 'DENY') {
+    return 'SoundCloud blocks streaming for this track in your region.';
+  }
+  return 'SoundCloud listed no stream formats for this track (it may be region-locked or unavailable).';
+}
 
 /** How long a source gets to produce audio before the next one is tried. */
 const SOURCE_TIMEOUT_MS = 12_000;
@@ -359,13 +370,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         }
 
         /* ---- 2. the network chain, best-known source first ---- */
-        const chain = buildAudioChain(track);
+        // Search rows arrive without stream formats, so ask SoundCloud for the
+        // full track (by id, then by permalink) before deciding it is dead.
+        const full = await hydrateTrack(track).catch(() => track);
+        if (superseded()) return;
+        const chain = await buildAudioChain(full);
         if (superseded()) return;
         if (chain.length === 0) {
-          reportFailure(
-            track,
-            'This track has no playable stream — it may be region-locked or disabled by the uploader.',
-          );
+          reportFailure(track, noSourceReason(full));
           return;
         }
 
@@ -386,7 +398,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             attemptingRef.current = false;
             fallbackDepthRef.current = attempt;
             // Fill the cache from whichever source is delivering audio.
-            void cacheTrackAudio(track, source);
+            void cacheTrackAudio(full, source);
             await play();
             return;
           } catch {
