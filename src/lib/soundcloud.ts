@@ -586,26 +586,83 @@ function rankTranscoding(t: SCTranscoding): number {
   return 50; // opus and friends — not universally playable
 }
 
-export async function getStreamUrl(track: SCTrack): Promise<StreamInfo | null> {
-  if (!track || typeof track.id !== 'number') return null;
+/**
+ * One playable route to a track's audio. A track usually offers several
+ * (`progressive` MP3 + a handful of HLS presets), and any of them can be
+ * region-locked or broken at any given moment — so the player walks this
+ * list in order instead of betting everything on one URL.
+ */
+export interface StreamCandidate {
+  /** stable id used to remember "this one worked" — e.g. `hls:aac_160k` */
+  key: string;
+  label: string;
+  kind: 'hls' | 'progressive';
+  preset: string;
+  /** Resolve the short-lived signed URL for exactly this transcoding. */
+  resolve: () => Promise<StreamInfo>;
+}
+
+const transcodingCache = new Map<string, { url: string; expires: number }>();
+
+async function resolveTranscoding(t: SCTranscoding, track: SCTrack): Promise<StreamInfo> {
+  const kind: 'hls' | 'progressive' = t.format?.protocol === 'hls' ? 'hls' : 'progressive';
+  const hit = transcodingCache.get(t.url);
+  if (hit && hit.expires > Date.now()) return { kind, url: hit.url };
+
+  const res = await apiFetch<{ url?: string }>(
+    t.url,
+    track.track_authorization ? { track_authorization: track.track_authorization } : {},
+  );
+  if (!res?.url) throw new ApiError(0, 'SoundCloud returned no stream URL for that format.');
+  if (transcodingCache.size > 200) transcodingCache.clear();
+  transcodingCache.set(t.url, { url: res.url, expires: Date.now() + 20 * MIN });
+  return { kind, url: res.url };
+}
+
+const PROTOCOL_LABEL: Record<string, string> = { hls: 'HLS', progressive: 'progressive' };
+
+/**
+ * Every usable transcoding for a track, best first. Resolution is lazy: each
+ * candidate only hits api-v2 when the player actually tries it.
+ */
+export function getStreamCandidates(track: SCTrack): StreamCandidate[] {
+  if (!track || typeof track.id !== 'number') return [];
   const transcodings = track.media?.transcodings ?? [];
   const playable = track.streamable !== false && track.policy !== 'BLOCK' && transcodings.length > 0;
-  if (!playable) return null;
+  if (!playable) return [];
+
+  const ranked = transcodings
+    .map((t, i) => ({ t, i, r: rankTranscoding(t) }))
+    .filter(({ r }) => r < 50)
+    .sort((a, b) => a.r - b.r);
+
+  const repeats = new Map<string, number>();
+  return ranked.map(({ t, i }) => {
+    const kind: 'hls' | 'progressive' = t.format?.protocol === 'hls' ? 'hls' : 'progressive';
+    const preset = t.preset ?? (kind === 'progressive' ? 'mp3' : `alt${i}`);
+    let key = `${kind}:${preset}`;
+    const seen = (repeats.get(key) ?? 0) + 1;
+    repeats.set(key, seen);
+    if (seen > 1) key = `${key}#${seen}`;
+    return {
+      key,
+      label: `SoundCloud ${PROTOCOL_LABEL[kind] ?? kind} (${preset})`,
+      kind,
+      preset,
+      resolve: () => resolveTranscoding(t, track),
+    };
+  });
+}
+
+/** Best single stream URL — kept for callers that don't need the fallback chain. */
+export async function getStreamUrl(track: SCTrack): Promise<StreamInfo | null> {
+  const candidates = getStreamCandidates(track);
+  if (candidates.length === 0) return null;
 
   return cached(`stream:${track.id}`, 20 * MIN, async () => {
-    const ranked = transcodings
-      .map((t) => ({ t, r: rankTranscoding(t) }))
-      .filter(({ r }) => r < 50)
-      .sort((a, b) => a.r - b.r);
-    for (const { t } of ranked) {
+    for (const candidate of candidates) {
       try {
-        const res = await apiFetch<{ url?: string }>(
-          t.url,
-          track.track_authorization ? { track_authorization: track.track_authorization } : {},
-        );
-        if (res?.url) {
-          return { kind: t.format?.protocol === 'hls' ? 'hls' : 'progressive', url: res.url } as StreamInfo;
-        }
+        return await candidate.resolve();
       } catch {
         /* try the next transcoding */
       }

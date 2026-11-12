@@ -11,6 +11,16 @@ import {
   getActiveRouteLabel,
   ClientIdUnavailableError,
 } from '../lib/soundcloud';
+import {
+  clearAudioCache,
+  formatBytes,
+  getAudioCacheStats,
+  isAudioCacheEnabled,
+  audioCacheSupported,
+  setAudioCacheEnabled,
+  type AudioCacheStats,
+} from '../lib/audioCache';
+import { forgetSourceMemory, getDownloadApi, getSourceMemory, setDownloadApi, type SourceMemory } from '../lib/mediaSources';
 import { version } from '../../package.json';
 import { getThemePref, setThemePref, type ThemePref } from '../lib/theme';
 import { removeKey } from '../lib/storage';
@@ -26,6 +36,17 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
   const [testing, setTesting] = useState(false);
   const [route, setRoute] = useState<string>('Not detected yet');
   const [themePref, setThemePrefState] = useState<ThemePref>(() => getThemePref());
+  const [cacheStats, setCacheStats] = useState<AudioCacheStats | null>(null);
+  const [cacheOn, setCacheOn] = useState<boolean>(() => isAudioCacheEnabled());
+  const [downloadApi, setDownloadApiState] = useState('');
+  const [sourceMemory, setSourceMemory] = useState<SourceMemory | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
+
+  const refreshPlaybackInfo = () => {
+    void getAudioCacheStats().then(setCacheStats).catch(() => setCacheStats(null));
+    setSourceMemory(getSourceMemory());
+    setCacheOn(isAudioCacheEnabled());
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -33,6 +54,8 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     setProxy(getApiProxy());
     setSource(getClientIdSource());
     setRoute(getActiveRouteLabel());
+    setDownloadApiState(getDownloadApi());
+    refreshPlaybackInfo();
     // warm detection in the background so the status line is truthful
     detectClientId()
       .then(() => setSource(getClientIdSource()))
@@ -92,6 +115,47 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
     setSource(getClientIdSource());
     setRoute(getActiveRouteLabel());
   };
+
+  const toggleCache = (on: boolean) => {
+    setAudioCacheEnabled(on);
+    setCacheOn(on);
+    toast(on ? 'Audio cache on — played tracks stay in this browser.' : 'Audio cache off — nothing new is stored.');
+  };
+
+  const clearCache = async () => {
+    setClearingCache(true);
+    try {
+      await clearAudioCache();
+      toast('Cached audio cleared.');
+    } finally {
+      setClearingCache(false);
+      refreshPlaybackInfo();
+    }
+  };
+
+  const saveDownloadApi = () => {
+    setDownloadApi(downloadApi);
+    toast(
+      downloadApi.trim()
+        ? 'Download API saved — it is tried whenever SoundCloud sources fail.'
+        : 'Download API removed.',
+    );
+  };
+
+  const forgetSources = () => {
+    forgetSourceMemory();
+    setSourceMemory(getSourceMemory());
+    toast('Source memory cleared — the chain starts from the best SoundCloud format again.');
+  };
+
+  const cacheSupported = audioCacheSupported();
+  const sourceLabelText =
+    sourceMemory && sourceMemory.stats.length > 0
+      ? sourceMemory.stats
+          .slice(0, 3)
+          .map((s) => `${s.key} ${s.ok} ok${s.fail ? ` / ${s.fail} failed` : ''}`)
+          .join(' · ')
+      : 'Learning — play a track';
 
   const themeOptions: { id: ThemePref; label: string }[] = [
     { id: 'system', label: 'System' },
@@ -168,6 +232,78 @@ export default function SettingsModal({ open, onClose }: { open: boolean; onClos
                 autoComplete="off"
               />
               <button className="btn btn-orange-solid btn-sm" onClick={saveProxy}>Save</button>
+            </div>
+          </section>
+
+          {/* ---- Playback & cache ---- */}
+          <section className="modal-section">
+            <h3>Playback &amp; cache</h3>
+            <p className="modal-help">
+              Every track is tried against several sources in order: the cached copy first, then each SoundCloud
+              format, then your own download API if you set one. The first source that actually plays is remembered
+              — for that track and for the next ones — and its audio is downloaded in the background and kept in
+              this browser, so a track that worked once keeps working.
+            </p>
+            <p className="modal-status">
+              <span className="status-label">cache</span>{' '}
+              {!cacheSupported
+                ? 'Not supported in this browser'
+                : cacheStats
+                  ? `${cacheStats.count} track${cacheStats.count === 1 ? '' : 's'} · ${formatBytes(cacheStats.bytes)} of ${formatBytes(cacheStats.maxBytes)}`
+                  : 'Checking…'}
+            </p>
+            <p className="modal-status">
+              <span className="status-label">sources</span> {sourceLabelText}
+            </p>
+            <div className="theme-picker" role="group" aria-label="Audio cache">
+              <button
+                className={`theme-option${cacheOn ? ' is-active' : ''}`}
+                onClick={() => toggleCache(true)}
+                aria-pressed={cacheOn}
+                disabled={!cacheSupported}
+              >
+                Cache on
+              </button>
+              <button
+                className={`theme-option${!cacheOn ? ' is-active' : ''}`}
+                onClick={() => toggleCache(false)}
+                aria-pressed={!cacheOn}
+                disabled={!cacheSupported}
+              >
+                Cache off
+              </button>
+            </div>
+            <div className="field-row" style={{ marginTop: 12 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => void clearCache()} disabled={clearingCache || !cacheSupported}>
+                {clearingCache ? 'Clearing…' : 'Clear cached audio'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={forgetSources}>
+                Forget source memory
+              </button>
+            </div>
+
+            <label className="field-label" htmlFor="download-api-input" style={{ marginTop: 18 }}>
+              Download API (optional)
+            </label>
+            <p className="modal-help">
+              Your own resolver/downloader endpoint, tried when SoundCloud&rsquo;s own formats won&rsquo;t play.
+              It is called as <code>GET &lt;endpoint&gt;?url=&lt;track URL&gt;</code> (or put <code>&#123;url&#125;</code> in the
+              endpoint as a placeholder) and should answer JSON with <code>downloadUrl</code> — or <code>url</code> /
+              <code>audio</code> — for example <code>&#123;"status": true, "downloadUrl": "https://…/track.mp3"&#125;</code>.
+            </p>
+            <div className="field-row">
+              <input
+                id="download-api-input"
+                className="text-input mono"
+                placeholder="https://your-api.example/getTrackInfo"
+                value={downloadApi}
+                onChange={(e) => setDownloadApiState(e.target.value)}
+                spellCheck={false}
+                autoComplete="off"
+              />
+              <button className="btn btn-orange-solid btn-sm" onClick={saveDownloadApi}>
+                Save
+              </button>
             </div>
           </section>
 
